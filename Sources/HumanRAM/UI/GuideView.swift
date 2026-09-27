@@ -45,6 +45,8 @@ struct GuideView: View {
                     .font(.title3).foregroundStyle(.secondary)
                 Text("by Derek Han")
                     .font(.caption).foregroundStyle(.tertiary)
+                Text("Early preview — still under development")
+                    .font(.caption2).foregroundStyle(.tertiary)
             }
         }
     }

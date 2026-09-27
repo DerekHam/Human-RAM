@@ -6,6 +6,8 @@ Most to-do apps ask you to organize. Human RAM asks almost nothing: you write a 
 
 Built by Derek Han with help from several AI agents.
 
+> **Status: early preview.** Human RAM is still under active development. It's already good for everyday use for some people — writing things down, keeping a small working set, and filing notes — but expect rough edges, incomplete features, and the occasional breaking change between versions. Keep your own backups.
+
 - **Write** — a global hotkey opens a one-line capture box anywhere. Type, press Enter, done.
 - **Volatile store** — captured items live in a small, bounded "working set" (like registers).
 - **Pop out** — items with a due time fire native notifications when they matter.
