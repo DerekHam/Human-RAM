@@ -4,7 +4,7 @@ A macOS menu-bar app that treats your attention like computer memory.
 
 Most to-do apps ask you to organize. Human RAM asks almost nothing: you write a thought down in one keystroke, and the app decides when it should come back to you. It's built around a simple metaphor — your mind is **RAM**, and this app is a small external module for it.
 
-Built by **Derek Han**.
+Built by Derek Han with help from several AI agents.
 
 - **Write** — a global hotkey opens a one-line capture box anywhere. Type, press Enter, done.
 - **Volatile store** — captured items live in a small, bounded "working set" (like registers).
