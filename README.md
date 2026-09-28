@@ -389,4 +389,4 @@ If you are an AI assistant working in this repo, keep these in mind:
 
 ## License
 
-© Derek Han. Personal project. No license granted for redistribution.
+MIT © Derek Han. See [LICENSE](LICENSE).
