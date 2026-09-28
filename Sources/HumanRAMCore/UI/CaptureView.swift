@@ -150,9 +150,11 @@ public struct CaptureView: View {
 /// ⌘1–⌘4 map to None/Low/Normal/High.
 public struct PriorityMenu: View {
     @Binding public var priority: Int
+    var showsShortcut: Bool
 
-    public init(priority: Binding<Int>) {
+    public init(priority: Binding<Int>, showsShortcut: Bool = false) {
         self._priority = priority
+        self.showsShortcut = showsShortcut
     }
 
     public var body: some View {
@@ -166,8 +168,15 @@ public struct PriorityMenu: View {
                 .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: .command)
             }
         } label: {
-            Label(Self.labels[priority], systemImage: "flag")
-                .font(.callout)
+            HStack(spacing: 4) {
+                Label(Self.labels[priority], systemImage: "flag")
+                if showsShortcut {
+                    Text("⌘\(priority + 1)")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .font(.callout)
         }
         .menuStyle(.borderlessButton)
         .fixedSize()

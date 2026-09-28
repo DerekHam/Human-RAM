@@ -42,6 +42,14 @@ public enum Shortcuts {
 }
 
 #if os(macOS)
+/// Windows registered by the UI so app-level key handling can be scoped to
+/// them. Menu-bar windows are non-activating, so their key events are invisible
+/// to `NSEvent` local monitors until the app is active; the view registers the
+/// window and activates the app when it appears.
+public enum HumanRAMWindows {
+    public static weak var menuBar: NSWindow?
+}
+
 /// Reports the hosting window the moment the view lands in it. `updateNSView`
 /// alone is unreliable for panels that host a view without further updates.
 private final class WindowReportingView: NSView {
@@ -152,6 +160,17 @@ extension View {
     public func priorityShortcut(_ onPriority: @escaping (Int) -> Void) -> some View {
         #if os(macOS)
         modifier(PriorityShortcutModifier(onPriority: onPriority))
+        #else
+        self
+        #endif
+    }
+
+    /// Reports the hosting window whenever it changes. Menu-bar windows are
+    /// non-activating, so the app-level key monitors can't see their events
+    /// until the app is activated; this is the hook to do that.
+    public func onWindow(_ handler: @escaping (NSWindow?) -> Void) -> some View {
+        #if os(macOS)
+        background(WindowAccessor(onWindow: handler))
         #else
         self
         #endif

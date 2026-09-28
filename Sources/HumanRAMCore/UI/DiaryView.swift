@@ -25,7 +25,9 @@ public struct DiaryView: View {
 
             if groups.isEmpty {
                 Spacer()
-                Text("Nothing here yet. Complete something and it will appear.")
+                Text(store.completed.isEmpty
+                     ? "Nothing here yet. Complete something and it will appear."
+                     : "No matches for “\(query)”.")
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity)
                 Spacer()

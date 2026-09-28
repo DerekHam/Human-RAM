@@ -25,7 +25,9 @@ public struct JournalView: View {
 
             if groups.isEmpty {
                 Spacer()
-                Text("Nothing here yet. Review your notes at night and they'll be filed here.")
+                Text(store.journaledNotes.isEmpty
+                     ? "Nothing here yet. Review your notes at night and they'll be filed here."
+                     : "No matches for “\(query)”.")
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity)
                 Spacer()

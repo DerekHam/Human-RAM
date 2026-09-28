@@ -251,7 +251,7 @@ public final class ItemStore: ObservableObject {
         if item.text.isEmpty { item.text = "(untitled)" }
         insert(item)
         items.append(item)
-        enforceCapacity()
+        enforceCapacity(protecting: item.id)
         applyTimeWindow()
         return item
     }
@@ -281,6 +281,10 @@ public final class ItemStore: ObservableObject {
         updated.dirty = true
         items[idx] = updated
         write(updated)
+        // An edit can move a task in or out of the window (or push RAM over
+        // capacity), so re-apply the same rules as add/load.
+        enforceCapacity(protecting: updated.id)
+        applyTimeWindow()
     }
 
     public func touch(id: UUID) {
@@ -306,6 +310,7 @@ public final class ItemStore: ObservableObject {
         mutate(id: id) {
             $0.completedAt = nil
             $0.state = .backlog
+            $0.loadedAt = nil
         }
     }
 
@@ -316,7 +321,7 @@ public final class ItemStore: ObservableObject {
             $0.loadedAt = Date()
             $0.touchedAt = Date()
         }
-        enforceCapacity()
+        enforceCapacity(protecting: id)
     }
 
     /// Spill an item to the "hard drive".
@@ -365,30 +370,37 @@ public final class ItemStore: ObservableObject {
             $0.loadedAt = Date()
             $0.touchedAt = Date()
         }
-        enforceCapacity()
+        enforceCapacity(protecting: id)
     }
 
     // MARK: - RAM rules
 
     /// If the working set exceeds capacity, spill the weakest item(s) to disk.
-    public func enforceCapacity() {
+    /// Pinned items are never auto-spilled. `protecting` keeps the item that
+    /// just arrived (captured or loaded) so the action isn't immediately undone.
+    public func enforceCapacity(protecting protectedID: UUID? = nil) {
         let limit = max(1, AppSettings.shared.workingSetLimit)
         while loaded.count > limit {
-            let spillable = loaded.filter { !$0.pinned }
-            guard let victim = spillable.last ?? loaded.last else { break }
+            let spillable = loaded.filter { !$0.pinned && $0.id != protectedID }
+            guard let victim = spillable.last else { break }
             spillToDisk(id: victim.id)
         }
     }
 
-    /// Promote backlog items into RAM until the limit is reached. Items whose
-    /// activation is beyond the auto-arrange window are skipped, so RAM holds
-    /// what's relevant now; undated items remain eligible.
-    public func fillWorkingSet(now: Date = Date()) {
+    /// Promote backlog items into RAM until the limit is reached. Dated items
+    /// must be inside the auto-arrange window. Undated items are eligible only
+    /// when `includeUndated`: the continuous auto-arrange passes `false` so it
+    /// doesn't resurrect something the user just spilled, while completing a
+    /// task uses the default to keep RAM full. Stale items stay on the disk.
+    public func fillWorkingSet(now: Date = Date(), includeUndated: Bool = true) {
         let limit = max(1, AppSettings.shared.workingSetLimit)
         guard loaded.count < limit else { enforceCapacity(); return }
         let cutoff = Self.windowCutoff(now: now)
+        let staleBefore = now.addingTimeInterval(-Double(max(1, AppSettings.shared.decaySpillDays)) * 86_400)
         let candidates = backlog.filter { item in
-            guard let activation = item.activationAt else { return true }
+            guard let activation = item.activationAt else {
+                return includeUndated && item.touchedAt >= staleBefore
+            }
             return activation <= cutoff
         }.prefix(limit - loaded.count)
         for c in candidates { loadToRAM(id: c.id) }
@@ -404,7 +416,7 @@ public final class ItemStore: ObservableObject {
             guard let activation = item.activationAt else { continue }
             if activation > cutoff { spillToDisk(id: item.id) }
         }
-        fillWorkingSet(now: now)
+        fillWorkingSet(now: now, includeUndated: false)
     }
 
     private static func windowCutoff(now: Date = Date()) -> Date {

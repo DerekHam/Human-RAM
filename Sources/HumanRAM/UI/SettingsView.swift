@@ -21,6 +21,7 @@ struct SettingsView: View {
                 }
                 .onChange(of: settings.workingSetLimit) { _, _ in
                     ItemStore.shared.enforceCapacity()
+                    ItemStore.shared.fillWorkingSet()
                 }
                 Text("How many items stay loaded at once. Overflow spills to the hard drive.")
                     .font(.caption).foregroundStyle(.secondary)
@@ -70,6 +71,9 @@ struct SettingsView: View {
                     .onChange(of: settings.noteReviewEnabled) { _, _ in
                         NotificationCenter.default.post(name: .humanRAMScheduleChanged, object: nil)
                     }
+                Toggle("Open review on launch", isOn: $settings.noteReviewOnLaunch)
+                Text("When off, the review only opens at its scheduled time — not when you launch the app. You can always open it from the menu bar's Review button.")
+                    .font(.caption).foregroundStyle(.secondary)
                 DatePicker("Review at", selection: $reviewTime, displayedComponents: .hourAndMinute)
                     .onChange(of: reviewTime) { _, value in
                         let c = Calendar.current.dateComponents([.hour, .minute], from: value)

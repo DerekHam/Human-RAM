@@ -28,22 +28,23 @@ public final class Scheduler {
 
         Notifications.shared.configure()
         scheduleDailyDigest()
-        scheduleNoteReview()
+        scheduleNoteReview(store: store)
 
         store.$items
             .receive(on: RunLoop.main)
-            .sink { items in
+            .sink { [weak self] items in
                 Notifications.shared.syncDueNotifications(items: items)
+                self?.scheduleNoteReview(store: store)
             }
             .store(in: &cancellables)
 
         NotificationCenter.default.publisher(for: .humanRAMScheduleChanged)
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
-                self?.lastScanDay = nil
-                self?.lastNoteReviewDay = nil
+                // Re-schedule the notifications, but keep the once-per-day
+                // bookkeeping: a settings tweak should not re-run today's scan.
                 self?.scheduleDailyDigest()
-                self?.scheduleNoteReview()
+                self?.scheduleNoteReview(store: store)
             }
             .store(in: &cancellables)
 
@@ -56,7 +57,7 @@ public final class Scheduler {
         // Housekeeping on launch.
         store.applyDecay()
         store.applyTimeWindow()
-        tick(store: store)
+        tick(store: store, isLaunch: true)
     }
 
     private func scheduleDailyDigest() {
@@ -64,16 +65,18 @@ public final class Scheduler {
         Notifications.shared.scheduleDailyDigest(hour: s.dailyScanHour, minute: s.dailyScanMinute)
     }
 
-    private func scheduleNoteReview() {
+    private func scheduleNoteReview(store: ItemStore) {
         let s = AppSettings.shared
+        // Only remind when there is something to review, so an empty inbox
+        // never gets a nightly "thoughts are waiting" alert.
         Notifications.shared.scheduleNoteReview(
             hour: s.noteReviewHour,
             minute: s.noteReviewMinute,
-            enabled: s.noteReviewEnabled
+            enabled: s.noteReviewEnabled && !store.notesInbox.isEmpty
         )
     }
 
-    private func tick(store: ItemStore) {
+    private func tick(store: ItemStore, isLaunch: Bool = false) {
         let now = Date()
         let cal = Calendar.current
         let today = cal.startOfDay(for: now)
@@ -88,8 +91,12 @@ public final class Scheduler {
         if AppSettings.shared.noteReviewEnabled,
            lastNoteReviewDay != today,
            now >= timeToday(AppSettings.shared.noteReviewHour, AppSettings.shared.noteReviewMinute, now: now) {
+            // Mark the day handled either way so a launch-time catch-up is not
+            // re-run by the next timer tick.
             lastNoteReviewDay = today
-            runNoteReview(store: store)
+            if !isLaunch || AppSettings.shared.noteReviewOnLaunch {
+                runNoteReview(store: store)
+            }
         }
     }
 

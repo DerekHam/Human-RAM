@@ -10,6 +10,7 @@ public struct DateTimeField<F: Hashable>: View {
 
     var placeholder: String = "MMDDHHMM"
     var label: String? = nil
+    var compact: Bool = false
     var focus: FocusState<F?>.Binding
     var field: F
     var onSubmit: () -> Void = {}
@@ -23,6 +24,7 @@ public struct DateTimeField<F: Hashable>: View {
         date: Binding<Date?>,
         placeholder: String = "MMDDHHMM",
         label: String? = nil,
+        compact: Bool = false,
         focus: FocusState<F?>.Binding,
         field: F,
         onSubmit: @escaping () -> Void = {}
@@ -30,53 +32,74 @@ public struct DateTimeField<F: Hashable>: View {
         self._date = date
         self.placeholder = placeholder
         self.label = label
+        self.compact = compact
         self.focus = focus
         self.field = field
         self.onSubmit = onSubmit
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            if let label {
-                Text(label.uppercased())
-                    .font(.caption2)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(.secondary)
-            }
-            HStack(spacing: 6) {
-                Image(systemName: "calendar")
-                    .foregroundStyle(.secondary)
-                TextField(placeholder, text: $raw)
-                    .textFieldStyle(.plain)
-                    .font(.system(.body, design: .monospaced))
-                    .focused(focus, equals: field)
-                    .onChange(of: raw) { _, newValue in
-                        let clean = NumericDateParser.sanitize(newValue)
-                        if clean != newValue { raw = clean }
-                        liveCommit()
+        Group {
+            if compact {
+                fieldRow
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 6))
+            } else {
+                VStack(alignment: .leading, spacing: 4) {
+                    if let label {
+                        Text(label.uppercased())
+                            .font(.caption2)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.secondary)
                     }
-                    .onSubmit {
-                        commit()
-                        onSubmit()
-                    }
-                if date != nil {
-                    Button { clear() } label: {
-                        Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.borderless)
+                    fieldRow
+                    Text(previewText)
+                        .font(.caption)
+                        .foregroundStyle(isValid ? Color.secondary : Color.red)
                 }
-                Button { showPicker.toggle() } label: {
-                    Image(systemName: "calendar.badge.clock")
-                }
-                .buttonStyle(.borderless)
-                .popover(isPresented: $showPicker, arrowEdge: .bottom) { pickerView }
             }
-
-            Text(previewText)
-                .font(.caption)
-                .foregroundStyle(isValid ? Color.secondary : Color.red)
         }
         .onAppear(perform: prefill)
+    }
+
+    private var fieldRow: some View {
+        HStack(spacing: compact ? 3 : 6) {
+            if compact, let label {
+                Text(label)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            Image(systemName: "calendar")
+                .font(compact ? .caption2 : .body)
+                .foregroundStyle(.secondary)
+            TextField(placeholder, text: $raw)
+                .textFieldStyle(.plain)
+                .font(.system(compact ? .caption : .body, design: .monospaced))
+                .frame(width: compact ? 52 : nil)
+                .foregroundStyle(compact && !raw.isEmpty && !isValid ? Color.red : Color.primary)
+                .focused(focus, equals: field)
+                .onChange(of: raw) { _, newValue in
+                    let clean = NumericDateParser.sanitize(newValue)
+                    if clean != newValue { raw = clean }
+                    liveCommit()
+                }
+                .onSubmit {
+                    commit()
+                    onSubmit()
+                }
+            if date != nil {
+                Button { clear() } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                }
+                .buttonStyle(.borderless)
+            }
+            Button { showPicker.toggle() } label: {
+                Image(systemName: "calendar.badge.clock")
+            }
+            .buttonStyle(.borderless)
+            .popover(isPresented: $showPicker, arrowEdge: .bottom) { pickerView }
+        }
     }
 
     // MARK: - Popover
@@ -139,7 +162,11 @@ public struct DateTimeField<F: Hashable>: View {
     }
 
     private func liveCommit() {
-        guard parsed.isComplete, let result = resolved(rollForward: true) else { return }
+        // Commit as soon as a date is recognizable, not only once the trailing
+        // minutes are typed. The preview treats a missing time as midnight, so
+        // the bound value must agree with what the field shows; otherwise a date
+        // typed without minutes is silently dropped when the form is saved.
+        guard parsed.hasDate, let result = resolved(rollForward: true) else { return }
         apply(result)
     }
 

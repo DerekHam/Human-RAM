@@ -29,7 +29,7 @@ final class Notifications: NSObject, UNUserNotificationCenterDelegate {
                 content.title = "Time for: \(item.text)"
                 content.body = item.detail ?? "From your Human RAM"
                 content.sound = .default
-                let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: due)
+                let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute, .second], from: due)
                 let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
                 let request = UNNotificationRequest(
                     identifier: "due-\(item.id.uuidString)",
@@ -90,7 +90,7 @@ final class Notifications: NSObject, UNUserNotificationCenterDelegate {
             } else if id == "daily-digest" || id.hasPrefix("due-") {
                 AppRouter.shared.presentDailyScan()
             }
+            completionHandler()
         }
-        completionHandler()
     }
 }

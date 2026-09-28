@@ -4,6 +4,7 @@ import HumanRAMCore
 
 struct GuideView: View {
     @ObservedObject private var settings = AppSettings.shared
+    @State private var window: NSWindow?
 
     private var taskHotkey: String {
         HotKeyDescriptor.string(keyCode: settings.hotkeyKeyCode, modifiers: settings.hotkeyModifiers)
@@ -32,6 +33,7 @@ struct GuideView: View {
             Divider()
             footer
         }
+        .onWindow { window = $0 }
     }
 
     private var header: some View {
@@ -135,7 +137,7 @@ struct GuideView: View {
             Toggle("Show this guide at startup", isOn: $settings.showGuideOnLaunch)
                 .toggleStyle(.checkbox)
             Spacer()
-            Button("Got it") { NSApp.keyWindow?.close() }
+            Button("Got it") { window?.close() }
                 .keyboardShortcut(.defaultAction)
         }
         .padding(16)

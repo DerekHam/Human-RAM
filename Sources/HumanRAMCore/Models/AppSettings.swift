@@ -28,6 +28,9 @@ public final class AppSettings: ObservableObject {
     // Notes
     @Published public var noteCapacity: Int { didSet { defaults.set(noteCapacity, forKey: "noteCapacity") } }
     @Published public var noteReviewEnabled: Bool { didSet { defaults.set(noteReviewEnabled, forKey: "noteReviewEnabled") } }
+    /// Open the review window on launch when the scheduled time already passed.
+    /// Off means the review only appears at its time (or via notification/Review).
+    @Published public var noteReviewOnLaunch: Bool { didSet { defaults.set(noteReviewOnLaunch, forKey: "noteReviewOnLaunch") } }
     @Published public var noteReviewHour: Int { didSet { defaults.set(noteReviewHour, forKey: "noteReviewHour") } }
     @Published public var noteReviewMinute: Int { didSet { defaults.set(noteReviewMinute, forKey: "noteReviewMinute") } }
 
@@ -47,6 +50,7 @@ public final class AppSettings: ObservableObject {
             "showGuideOnLaunch": AppVariant.showsGuideByDefault,
             "noteCapacity": 15,
             "noteReviewEnabled": true,
+            "noteReviewOnLaunch": false,
             "noteReviewHour": 0,
             "noteReviewMinute": 0,
         ])
@@ -59,11 +63,22 @@ public final class AppSettings: ObservableObject {
         dailyScanMinute = defaults.integer(forKey: "dailyScanMinute")
         hotkeyKeyCode = defaults.integer(forKey: "hotkeyKeyCode")
         hotkeyModifiers = defaults.integer(forKey: "hotkeyModifiers")
-        year = defaults.integer(forKey: "year")
+        // The entry year is a session default: typed dates should mean the
+        // upcoming occurrence as of now. A year left over from a previous
+        // session (or a stale/rolled value) must not silently shift every date.
+        let currentYear = Calendar.current.component(.year, from: Date())
+        let storedYear = defaults.integer(forKey: "year")
+        if storedYear == currentYear {
+            year = storedYear
+        } else {
+            year = currentYear
+            defaults.set(currentYear, forKey: "year")
+        }
         launchAtLogin = defaults.bool(forKey: "launchAtLogin")
         showGuideOnLaunch = defaults.bool(forKey: "showGuideOnLaunch")
         noteCapacity = defaults.integer(forKey: "noteCapacity")
         noteReviewEnabled = defaults.bool(forKey: "noteReviewEnabled")
+        noteReviewOnLaunch = defaults.bool(forKey: "noteReviewOnLaunch")
         noteReviewHour = defaults.integer(forKey: "noteReviewHour")
         noteReviewMinute = defaults.integer(forKey: "noteReviewMinute")
     }

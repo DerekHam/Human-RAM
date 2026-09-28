@@ -66,6 +66,7 @@ Tasks and notes use separate capacities, separate intervals, and separate window
 
 ```bash
 # Build the app bundle + widget extension (default: debug)
+export HRAM_SIGN_ID="Apple Development: you@example.com (XXXXXXXXXX)"
 ./Scripts/build_app.sh
 
 # Or an optimized build
@@ -82,8 +83,6 @@ The widget build needs a signing identity. Set it via `HRAM_SIGN_ID` (find yours
 ```bash
 ./Scripts/build_app_adhoc.sh
 ```
-
-There is also a pre-built `build/Human RAM (no-widget backup).app` snapshot from before the widget existed.
 
 ### Run the tests
 
@@ -144,15 +143,28 @@ Priority can always be set from the keyboard without opening the priority menu: 
 
 These task shortcuts are shared across every editing surface, including the item editor opened from the Daily Scan (or any task's **Edit…** action). The editor uses the same keys: `Enter` walks content → start → due, `⌘⏎` saves, `⌘1`–`⌘4` set priority, and `Esc` cancels without saving. The **Notes** area is multi-line like every other note field, so `Enter` inserts a newline there rather than advancing; click or Tab into the schedule fields. Plain `Enter` in the nightly review inserts a newline while editing, and `⌘⏎` saves the edit. Shortcut detection lives in `UI/Shortcuts.swift`; new keys belong there so every interface stays in sync.
 
-Typing a date is optional. Use the calendar button for point-and-click. The **year** is inferred as the next upcoming occurrence and is only changed through the explicit year stepper. Impossible dates (e.g. `0230` for Feb 30) are reported as invalid rather than silently rolled over. Parsing lives in `Models/NumericDateParser.swift`, so it is unit-tested without a view.
+Typing a date is optional. Use the calendar button for point-and-click. The **year** defaults to the current one each launch (a session default, adjustable via the year stepper): a date typed without a year is read as the next upcoming occurrence, but a date on **today** stays put rather than jumping a whole year. Impossible dates (e.g. `0230` for Feb 30) are reported as invalid rather than silently rolled over. Parsing lives in `Models/NumericDateParser.swift`, so it is unit-tested without a view.
 
 ### The menu bar
 
 - The icon shows the task count (or due count), and a red dot when the notes inbox is full.
-- The dropdown lists loaded tasks, the hard-drive backlog, and pending notes.
+- The dropdown is wide and compact: every **loaded** task is always visible with no inner scroll, while the hard-drive backlog and pending notes share a short scroll area beneath it. Pending notes render as a one-line, two-column list.
 - The quick composer at the top writes a **Task** or **Note** (segmented toggle) straight from the dropdown, with optional start/due dates and priority for tasks, and a button to pop out the full capture overlay.
+- Press **Tab** in the composer to switch between Task and Note. (The menu-bar window is non-activating, so the app briefly activates while it is open; that is what lets the keyboard shortcuts reach it.)
+- Hotkeys are shown inline: the configurable capture key sits next to the pop-out button, `⌘⏎` by the store button, and the `⌘1`–`⌘4` mapping in the priority menu, plus a compact hint line under the composer.
 - Right-click a task row for actions: complete, edit, spill/load, pin, set priority, delete.
-- Footer buttons open **Scan**, **Diary**, **Journal**, **Settings**, and Quit.
+- Footer buttons open **Scan**, **Diary**, **Journal**, **Settings**, and Quit, each with a working shortcut.
+
+| Menu-bar action | Shortcut |
+|---|---|
+| Capture (global, works anywhere) | `⌘⇧N` (configurable) |
+| Store from the quick composer | `⌘⏎` |
+| Set priority in the quick composer | `⌘1`–`⌘4` |
+| Scan | `⌘D` |
+| Diary | `⌘Y` |
+| Journal | `⌘J` |
+| Settings | `⌘,` |
+| Quit | `⌘Q` |
 
 ### Widget
 
@@ -189,6 +201,7 @@ Opens at the configured time when notes are pending. Reviews the inbox one note 
 | Notes: inbox capacity | 15 | Inbox size before the FULL flag. |
 | Notes: nightly review | on | Enables the nightly review. |
 | Notes: review at | 00:00 | Nightly review time. |
+| Notes: open review on launch | off | If on, the review opens at launch when its time already passed; off leaves it to its scheduled time, the notification, or the menu-bar **Review** button. |
 | Capture hotkey | `⌘⇧N` | Opens the capture box as a task; press `Tab` for a note. |
 | Launch at login | off | Register via `SMAppService`. |
 | Guide at startup | on in shareable build | Show the welcome guide on launch; reopen from **Settings → Guide**. |
@@ -294,6 +307,7 @@ Scripts/build_app.sh          build + assemble app + widget + codesign
 Scripts/build_app_adhoc.sh    backup build: app only, ad-hoc signed, no widget
 Scripts/build_share.sh        shareable variant: -DHRAM_SHAREABLE, own data + bundle id
 Tests/HumanRAMTests/          unit tests for store rules, decay, ordering, date parsing
+CHANGELOG.md                  release notes
 ```
 
 ### Key invariants
@@ -301,7 +315,7 @@ Tests/HumanRAMTests/          unit tests for store rules, decay, ordering, date 
 - `ItemStore` is the single source of truth. All mutations write through to SQLite immediately and publish via `@Published items`.
 - All UI observes `ItemStore.shared` (and `AppSettings.shared`) via `@EnvironmentObject` / `@ObservedObject`.
 - The capture overlay's state lives in `CaptureModel`, owned by `CapturePanel`, so a local `NSEvent` monitor can drive `Tab`/`Esc` reliably.
-- Windows re-open through `WindowManager.shared.show…`, which reuses existing `NSWindowController`s.
+- Windows re-open through `WindowManager.shared.show…`, which reuses existing `NSWindowController`s; transient editors (the item editor) are rebuilt each time so their draft starts from the current item.
 
 ---
 
@@ -368,8 +382,8 @@ If you are an AI assistant working in this repo, keep these in mind:
 
 - The **hotkey recorder** is not implemented; Settings only offers reset-to-default. `⌘⇧N` is the default.
 - The notes inbox soft-caps: it flags **FULL** past capacity and never auto-files, rather than refusing captures.
-- The app bundle is ad-hoc signed (fine for personal use, not for distribution).
-- The daily scan and nightly review open their windows if the app is running at the trigger time; otherwise the notification still fires and tapping it opens the window.
+- `build_app.sh` produces a Developer ID / Apple Development–signed bundle (needs `HRAM_SIGN_ID`); `build_app_adhoc.sh` and `build_share.sh` produce ad-hoc signed bundles (fine for personal use, not for distribution).
+- The daily scan opens at its trigger time (or on launch, if its time already passed and it hasn't run that day). The nightly review opens at the trigger time while the app is running, from the notification, or from the menu-bar **Review** button; it only opens at launch when **Open review on launch** is enabled.
 
 ---
 

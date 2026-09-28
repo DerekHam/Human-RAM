@@ -12,14 +12,18 @@ final class WindowManager {
         title: String,
         size: CGSize,
         resizable: Bool = true,
+        reuse: Bool = true,
         @ViewBuilder content: () -> Content
     ) {
         NSApp.setActivationPolicy(.accessory)
-        if let wc = controllers[id], let window = wc.window {
+        if reuse, let wc = controllers[id], let window = wc.window {
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             return
         }
+        // Transient editors are rebuilt on every open so their draft always
+        // starts from the current item; a cached editor would save stale values.
+        controllers.removeValue(forKey: id)?.close()
         let root = content().environmentObject(ItemStore.shared)
         let hosting = NSHostingController(rootView: root)
         let window = NSWindow(contentViewController: hosting)
@@ -49,7 +53,7 @@ final class WindowManager {
     }
 
     func showNotesReview() {
-        show("notes-review", title: "Tonight's Notes", size: CGSize(width: 560, height: 520)) {
+        show("notes-review", title: "Tonight's Notes", size: CGSize(width: 560, height: 520), reuse: false) {
             NotesReviewView()
         }
     }
@@ -73,7 +77,7 @@ final class WindowManager {
     }
 
     func showEdit(itemID: UUID) {
-        show("edit-\(itemID.uuidString)", title: "Edit Item", size: CGSize(width: 440, height: 360)) {
+        show("edit-\(itemID.uuidString)", title: "Edit Item", size: CGSize(width: 440, height: 360), reuse: false) {
             EditItemView(itemID: itemID)
         }
     }

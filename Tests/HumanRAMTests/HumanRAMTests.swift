@@ -31,6 +31,58 @@ final class HumanRAMTests: XCTestCase {
         XCTAssertEqual(store.items.count, 5, "nothing is lost")
     }
 
+    func testNewTaskStaysInRAMWhenAtCapacity() {
+        clearAll()
+        let original = AppSettings.shared.workingSetLimit
+        AppSettings.shared.workingSetLimit = 2
+        defer { AppSettings.shared.workingSetLimit = original }
+
+        let first = store.add(text: "first")
+        let second = store.add(text: "second")
+        let newest = store.add(text: "newest")
+
+        XCTAssertEqual(store.loaded.count, 2, "capacity still holds")
+        XCTAssertTrue(store.loaded.contains { $0.id == newest.id }, "a fresh capture stays in RAM")
+        XCTAssertTrue(store.loaded.contains { $0.id == first.id })
+        XCTAssertFalse(store.loaded.contains { $0.id == second.id }, "an older task makes room instead")
+    }
+
+    func testCapacityNeverSpillsPinnedItems() {
+        clearAll()
+        let original = AppSettings.shared.workingSetLimit
+        AppSettings.shared.workingSetLimit = 3
+        defer { AppSettings.shared.workingSetLimit = original }
+
+        let a = store.add(text: "a")
+        let b = store.add(text: "b")
+        let c = store.add(text: "c")
+        for id in [a.id, b.id, c.id] { store.togglePin(id: id) }
+
+        AppSettings.shared.workingSetLimit = 1
+        store.enforceCapacity()
+
+        XCTAssertEqual(store.loaded.count, 3, "pinned items are never auto-spilled, even over capacity")
+        for id in [a.id, b.id, c.id] {
+            XCTAssertEqual(store.item(id: id)?.state, .loaded)
+        }
+    }
+
+    func testManualLoadStaysInRAMWhenAtCapacity() {
+        clearAll()
+        let original = AppSettings.shared.workingSetLimit
+        AppSettings.shared.workingSetLimit = 2
+        defer { AppSettings.shared.workingSetLimit = original }
+
+        store.add(text: "a")
+        store.add(text: "b")
+        let far = store.add(text: "far", startAt: Date().addingTimeInterval(1000 * 3600))
+        XCTAssertEqual(store.item(id: far.id)?.state, .backlog, "beyond the window it spills")
+
+        store.loadToRAM(id: far.id)
+        XCTAssertEqual(store.item(id: far.id)?.state, .loaded, "a manually loaded task makes room for itself")
+        XCTAssertEqual(store.loaded.count, 2)
+    }
+
     func testCompleteFilesToDiaryAndRefills() {
         clearAll()
         let original = AppSettings.shared.workingSetLimit
@@ -103,6 +155,66 @@ final class HumanRAMTests: XCTestCase {
         AppSettings.shared.autoArrangeEnabled = true
         store.applyTimeWindow()
         XCTAssertEqual(store.item(id: pinned.id)?.state, .loaded, "pinned tasks survive the window")
+    }
+
+    func testDecaySpillIsNotUndoneByAutoArrange() {
+        clearAll()
+        let originalEnabled = AppSettings.shared.autoArrangeEnabled
+        let originalWindow = AppSettings.shared.ramWindowHours
+        let originalSpill = AppSettings.shared.decaySpillDays
+        AppSettings.shared.autoArrangeEnabled = true
+        AppSettings.shared.ramWindowHours = 48
+        AppSettings.shared.decaySpillDays = 10
+        defer {
+            AppSettings.shared.autoArrangeEnabled = originalEnabled
+            AppSettings.shared.ramWindowHours = originalWindow
+            AppSettings.shared.decaySpillDays = originalSpill
+        }
+
+        let stale = store.add(text: "stale")
+        let later = Date().addingTimeInterval(11 * 86_400)
+        store.applyDecay(now: later)
+        store.applyTimeWindow(now: later)
+
+        XCTAssertEqual(store.item(id: stale.id)?.state, .backlog, "a decayed task stays on the hard drive")
+    }
+
+    func testManualSpillIsNotUndoneByAutoArrange() {
+        clearAll()
+        let originalEnabled = AppSettings.shared.autoArrangeEnabled
+        let originalWindow = AppSettings.shared.ramWindowHours
+        AppSettings.shared.autoArrangeEnabled = true
+        AppSettings.shared.ramWindowHours = 48
+        defer {
+            AppSettings.shared.autoArrangeEnabled = originalEnabled
+            AppSettings.shared.ramWindowHours = originalWindow
+        }
+
+        let task = store.add(text: "spill me")
+        store.spillToDisk(id: task.id)
+        store.applyTimeWindow()
+
+        XCTAssertEqual(store.item(id: task.id)?.state, .backlog, "an undated spill stays on the hard drive")
+    }
+
+    func testEditingTaskBeyondWindowSpillsIt() {
+        clearAll()
+        let originalEnabled = AppSettings.shared.autoArrangeEnabled
+        let originalWindow = AppSettings.shared.ramWindowHours
+        AppSettings.shared.autoArrangeEnabled = true
+        AppSettings.shared.ramWindowHours = 48
+        defer {
+            AppSettings.shared.autoArrangeEnabled = originalEnabled
+            AppSettings.shared.ramWindowHours = originalWindow
+        }
+
+        var task = store.add(text: "soon", startAt: Date().addingTimeInterval(2 * 3600))
+        XCTAssertEqual(store.item(id: task.id)?.state, .loaded)
+
+        task.startAt = Date().addingTimeInterval(72 * 3600)
+        store.update(task)
+
+        XCTAssertEqual(store.item(id: task.id)?.state, .backlog, "editing beyond the window spills the task")
     }
 
     // MARK: - Notes
@@ -314,6 +426,45 @@ final class HumanRAMTests: XCTestCase {
         let future = NumericDateParser.parse("12311500")
         let kept = NumericDateParser.date(from: future, year: 2026, now: now, calendar: cal)
         XCTAssertEqual(kept?.year, 2026, "a future date stays put")
+    }
+
+    func testNumericDateParserResolvesDateWithoutMinutes() {
+        let cal = utcCalendar
+        let now = cal.date(from: DateComponents(year: 2026, month: 9, day: 1, hour: 12))!
+
+        // A day-only stamp is not "complete", but it still resolves — this is
+        // what lets the date field commit a typed date before minutes are added.
+        let dayOnly = NumericDateParser.parse("0923")
+        XCTAssertTrue(dayOnly.hasDate)
+        XCTAssertFalse(dayOnly.isComplete)
+        let resolved = NumericDateParser.date(from: dayOnly, year: 2026, now: now, calendar: cal)
+        XCTAssertNotNil(resolved)
+
+        let comps = cal.dateComponents([.year, .month, .day, .hour, .minute], from: resolved!.date)
+        XCTAssertEqual(comps.month, 9)
+        XCTAssertEqual(comps.day, 23)
+        XCTAssertEqual(comps.hour, 0)
+        XCTAssertEqual(comps.minute, 0)
+    }
+
+    func testNumericDateParserKeepsSameDayTypedDates() {
+        let cal = utcCalendar
+        let now = cal.date(from: DateComponents(year: 2026, month: 9, day: 28, hour: 0, minute: 30))!
+
+        // Midnight today is technically in the past, but a same-day date must
+        // stay put instead of rolling a full year.
+        let today = NumericDateParser.parse("0928")
+        let resolved = NumericDateParser.date(from: today, year: 2026, now: now, calendar: cal)
+        XCTAssertEqual(resolved?.year, 2026, "today's date is not next year")
+        let comps = cal.dateComponents([.year, .month, .day], from: resolved!.date)
+        XCTAssertEqual(comps.year, 2026)
+        XCTAssertEqual(comps.month, 9)
+        XCTAssertEqual(comps.day, 28)
+
+        // An earlier time today is kept too, not rolled a year.
+        let earlier = NumericDateParser.parse("09280800")
+        let kept = NumericDateParser.date(from: earlier, year: 2026, now: now, calendar: cal)
+        XCTAssertEqual(kept?.year, 2026)
     }
 
     func testNumericDateParserCanSkipRollForward() {

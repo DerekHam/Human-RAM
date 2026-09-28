@@ -36,6 +36,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // The capture panel handles its own keys (see CapturePanelWindow),
             // including when the app is inactive and local monitors are skipped.
             if event.window is CapturePanelWindow { return event }
+            // Tab in the menu-bar window switches between task and note.
+            if Shortcuts.isTab(event),
+               let menuBar = HumanRAMWindows.menuBar,
+               event.window === menuBar {
+                NotificationCenter.default.post(name: .humanRAMToggleCaptureMode, object: event.window)
+                return nil
+            }
             guard let priority = Shortcuts.priority(for: event) else { return event }
             NotificationCenter.default.post(
                 name: .humanRAMSetPriority,

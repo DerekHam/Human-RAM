@@ -107,6 +107,7 @@ public struct NotesReviewView: View {
                 } label: {
                     Label("Delete", systemImage: "trash")
                 }
+                .disabled(isEditing)
 
                 Spacer()
 
@@ -115,18 +116,21 @@ public struct NotesReviewView: View {
                 } label: {
                     Label("Later", systemImage: "clock.arrow.circlepath")
                 }
+                .disabled(isEditing)
 
                 Button {
                     store.noteToTask(id: note.id)
                 } label: {
                     Label("Make task", systemImage: "arrow.up.right.square")
                 }
+                .disabled(isEditing)
 
                 Button {
                     store.journalNote(id: note.id)
                 } label: {
                     Label("Journal", systemImage: "book.closed")
                 }
+                .disabled(isEditing)
                 .keyboardShortcut(isEditing ? nil : KeyboardShortcut.defaultAction)
             }
         }

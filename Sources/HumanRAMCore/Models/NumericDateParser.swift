@@ -56,9 +56,10 @@ public enum NumericDateParser {
     }
 
     /// Builds a concrete date from a full stamp. When `rollForward` is true and
-    /// the date falls in the past within `year`, it advances to the next year so
-    /// typed dates always mean the next upcoming occurrence. Returns the date and
-    /// the year actually used.
+    /// the date falls before today, it advances to the next year so typed dates
+    /// always mean the next upcoming occurrence. A date earlier today is kept:
+    /// typed times default to midnight, so rolling those forward would silently
+    /// jump a whole year. Returns the date and the year actually used.
     public static func date(
         from stamp: NumericDateStamp,
         year: Int,
@@ -86,7 +87,7 @@ public enum NumericDateParser {
 
         var resolvedYear = year
         if rollForward,
-           result < now,
+           result < calendar.startOfDay(for: now),
            year == calendar.component(.year, from: now),
            let bumped = calendar.date(byAdding: .year, value: 1, to: result) {
             result = bumped

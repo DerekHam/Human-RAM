@@ -6,7 +6,7 @@ struct MenuBarView: View {
     @EnvironmentObject private var store: ItemStore
     @ObservedObject private var settings = AppSettings.shared
 
-    private enum QuickField: Hashable { case start, due }
+    private enum QuickField: Hashable { case text, start, due }
 
     @State private var quickMode: CaptureMode = .task
     @State private var quickText = ""
@@ -14,21 +14,71 @@ struct MenuBarView: View {
     @State private var quickDue: Date?
     @State private var quickPriority = 2
     @State private var showBacklog = false
-    @FocusState private var quickFocused: Bool?
+    @State private var lowerContentHeight: CGFloat = 0
+    @State private var contentHeight: CGFloat = 0
     @FocusState private var quickField: QuickField?
 
+    private let menuWidth: CGFloat = 440
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             header
             quickCapture
+            Text(hint)
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
             Divider()
             content
             Divider()
             footer
         }
-        .padding(12)
-        .frame(width: 380)
+        .padding(10)
+        .frame(width: menuWidth)
+        .background(
+            GeometryReader { proxy in
+                Color.clear.preference(key: ContentHeightKey.self, value: proxy.size.height)
+            }
+        )
+        .background(WindowSizer(width: menuWidth, height: contentHeight))
+        .onPreferenceChange(ContentHeightKey.self) { contentHeight = $0 }
+        .onWindow { window in
+            // MenuBarExtra's window is non-activating; without this the app-level
+            // key monitors (Tab/shortcuts) never see events from it.
+            HumanRAMWindows.menuBar = window
+            guard window != nil, !NSApp.isActive else { return }
+            NSApp.activate(ignoringOtherApps: true)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .humanRAMToggleCaptureMode)) { _ in
+            toggleQuickMode()
+        }
         .priorityShortcut { if quickMode == .task { quickPriority = $0 } }
+    }
+
+    private func toggleQuickMode() {
+        quickMode = quickMode == .task ? .note : .task
+        quickField = .text
+    }
+
+    private var captureKey: String {
+        HotKeyDescriptor.string(keyCode: settings.hotkeyKeyCode, modifiers: settings.hotkeyModifiers)
+    }
+
+    private var hint: String {
+        quickMode == .task
+            ? "\(captureKey) capture · ⇥ note · ⏎ next · ⌘⏎ store · ⌘1–4 priority"
+            : "\(captureKey) capture · ⇥ task · ⏎ new line · ⌘⏎ store"
+    }
+
+    /// How tall the scrollable backlog/notes area may grow, clamped to the
+    /// available screen so the dropdown never runs off the bottom.
+    private var lowerMaxHeight: CGFloat {
+        let visible = NSScreen.main?.visibleFrame.height ?? 800
+        return max(180, min(360, visible - 430))
+    }
+
+    private var noteColumns: [GridItem] {
+        [GridItem(.flexible(), spacing: 10, alignment: .leading),
+         GridItem(.flexible(), spacing: 10, alignment: .leading)]
     }
 
     // MARK: - Sections
@@ -59,16 +109,22 @@ struct MenuBarView: View {
                 Spacer()
 
                 Button { CapturePanel.shared.show(mode: quickMode) } label: {
-                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.up.left.and.arrow.down.right")
+                        Text(captureKey).font(.caption2).foregroundStyle(.tertiary)
+                    }
                 }
                 .buttonStyle(.borderless)
-                .help("Open the floating capture window")
+                .help("Open the floating capture window (\(captureKey))")
             }
 
             HStack(alignment: .bottom, spacing: 8) {
                 quickInput
                 Button(action: addQuick) {
-                    Image(systemName: "plus.circle.fill")
+                    HStack(spacing: 4) {
+                        Image(systemName: "plus.circle.fill")
+                        Text("⌘⏎").font(.caption2).foregroundStyle(.tertiary)
+                    }
                 }
                 .buttonStyle(.borderless)
                 .keyboardShortcut(.return, modifiers: .command)
@@ -77,13 +133,11 @@ struct MenuBarView: View {
             }
 
             if quickMode == .task {
-                HStack(alignment: .top, spacing: 12) {
-                    DateTimeField(date: $quickStartAt, label: "Start", focus: $quickField, field: .start, onSubmit: { quickField = .due })
-                    DateTimeField(date: $quickDue, label: "Due", focus: $quickField, field: .due, onSubmit: addQuick)
-                }
-                HStack {
-                    Spacer()
-                    PriorityMenu(priority: $quickPriority)
+                HStack(alignment: .center, spacing: 8) {
+                    DateTimeField(date: $quickStartAt, placeholder: "MMDD", label: "Start", compact: true, focus: $quickField, field: .start, onSubmit: { quickField = .due })
+                    DateTimeField(date: $quickDue, placeholder: "MMDD", label: "Due", compact: true, focus: $quickField, field: .due, onSubmit: addQuick)
+                    Spacer(minLength: 0)
+                    PriorityMenu(priority: $quickPriority, showsShortcut: true)
                 }
             }
         }
@@ -95,56 +149,68 @@ struct MenuBarView: View {
             TextField("Quick write to RAM…", text: $quickText)
                 .textFieldStyle(.roundedBorder)
                 .lineLimit(1)
-                .focused($quickFocused, equals: true)
-                .onSubmit { addQuick() }
+                .focused($quickField, equals: .text)
+                .onSubmit { quickField = .start }
         } else {
             MultilineEditor("Jot a note…", text: $quickText, minHeight: 60, bordered: true,
-                            focus: $quickFocused, field: true)
+                            focus: $quickField, field: .text)
         }
     }
 
     private var content: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 6) {
-                if store.loaded.isEmpty {
-                    emptyState
-                } else {
-                    sectionTitle("Loaded", count: store.loaded.count)
-                    ForEach(store.loaded) { item in
-                        ItemRow(item: item)
-                    }
+        VStack(alignment: .leading, spacing: 6) {
+            if store.loaded.isEmpty {
+                emptyState
+            } else {
+                sectionTitle("Loaded", count: store.loaded.count)
+                ForEach(store.loaded) { item in
+                    ItemRow(item: item)
                 }
+            }
 
-                if !store.backlog.isEmpty {
-                    Divider().padding(.vertical, 4)
-                    DisclosureGroup(isExpanded: $showBacklog) {
-                        ForEach(store.backlog) { item in
-                            ItemRow(item: item)
-                        }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "externaldrive")
-                            Text("Hard drive")
-                            Text("\(store.backlog.count)")
-                                .font(.caption2)
-                                .padding(.horizontal, 5)
-                                .padding(.vertical, 1)
-                                .background(.quaternary, in: Capsule())
-                        }
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                    }
+            Divider().padding(.vertical, 4)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 6) {
+                    backlogSection
+                    notesSection
                 }
+                .background(
+                    GeometryReader { proxy in
+                        Color.clear.preference(key: LowerHeightKey.self, value: proxy.size.height)
+                    }
+                )
+            }
+            .frame(height: min(max(lowerContentHeight, 1), lowerMaxHeight))
+            .onPreferenceChange(LowerHeightKey.self) { lowerContentHeight = $0 }
+        }
+    }
 
-                notesSection
+    @ViewBuilder
+    private var backlogSection: some View {
+        if !store.backlog.isEmpty {
+            DisclosureGroup(isExpanded: $showBacklog) {
+                ForEach(store.backlog) { item in
+                    ItemRow(item: item)
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "externaldrive")
+                    Text("Hard drive")
+                    Text("\(store.backlog.count)")
+                        .font(.caption2)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(.quaternary, in: Capsule())
+                }
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
             }
         }
-        .frame(maxHeight: 380)
     }
 
     private var notesSection: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Divider().padding(.vertical, 4)
             HStack(spacing: 6) {
                 Image(systemName: "brain")
                 Text("NOTES")
@@ -168,11 +234,13 @@ struct MenuBarView: View {
                 Text("No thoughts waiting.")
                     .font(.caption).foregroundStyle(.tertiary)
             } else {
-                ForEach(store.notesInbox.prefix(4)) { note in
-                    NoteRow(note: note)
+                LazyVGrid(columns: noteColumns, alignment: .leading, spacing: 4) {
+                    ForEach(store.notesInbox.prefix(6)) { note in
+                        NoteRow(note: note)
+                    }
                 }
-                if store.inboxCount > 4 {
-                    Text("+\(store.inboxCount - 4) more…")
+                if store.inboxCount > 6 {
+                    Text("+\(store.inboxCount - 6) more…")
                         .font(.caption2).foregroundStyle(.secondary)
                 }
             }
@@ -183,7 +251,7 @@ struct MenuBarView: View {
         VStack(alignment: .leading, spacing: 4) {
             Text("RAM is empty")
                 .font(.subheadline)
-            Text("Hit \(HotKeyDescriptor.string(keyCode: settings.hotkeyKeyCode, modifiers: settings.hotkeyModifiers)) to capture anything.")
+            Text("Hit \(captureKey) to capture anything.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -202,33 +270,52 @@ struct MenuBarView: View {
     }
 
     private var footer: some View {
-        HStack(spacing: 12) {
-            Button { WindowManager.shared.showDigest() } label: {
-                Label("Scan", systemImage: "sun.max")
+        HStack(spacing: 6) {
+            footerButton("Scan", systemImage: "sun.max", key: "⌘D", shortcut: KeyEquivalent("d")) {
+                WindowManager.shared.showDigest()
             }
-            .buttonStyle(.borderless)
-            Button { WindowManager.shared.showDiary() } label: {
-                Label("Diary", systemImage: "book")
+            footerButton("Diary", systemImage: "book", key: "⌘Y", shortcut: KeyEquivalent("y")) {
+                WindowManager.shared.showDiary()
             }
-            .buttonStyle(.borderless)
-            Button { WindowManager.shared.showJournal() } label: {
-                Label("Journal", systemImage: "brain")
+            footerButton("Journal", systemImage: "brain", key: "⌘J", shortcut: KeyEquivalent("j")) {
+                WindowManager.shared.showJournal()
             }
-            .buttonStyle(.borderless)
-            Button { WindowManager.shared.showSettings() } label: {
-                Label("Settings", systemImage: "gearshape")
+            footerButton("Settings", systemImage: "gearshape", key: "⌘,", shortcut: KeyEquivalent(",")) {
+                WindowManager.shared.showSettings()
             }
-            .buttonStyle(.borderless)
-            Spacer()
-            Button {
+            Spacer(minLength: 0)
+            footerButton(nil, systemImage: "power", key: "⌘Q", shortcut: KeyEquivalent("q")) {
                 NSApp.terminate(nil)
-            } label: {
-                Image(systemName: "power")
             }
-            .buttonStyle(.borderless)
         }
-        .font(.callout)
+        .font(.caption)
         .labelStyle(.titleAndIcon)
+    }
+
+    private func footerButton(
+        _ title: String?,
+        systemImage: String,
+        key: String,
+        shortcut: KeyEquivalent,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 3) {
+                if let title {
+                    Label(title, systemImage: systemImage)
+                        .fixedSize(horizontal: true, vertical: false)
+                } else {
+                    Image(systemName: systemImage)
+                }
+                Text(key)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+        }
+        .buttonStyle(.borderless)
+        .keyboardShortcut(shortcut, modifiers: .command)
+        .help(title.map { "\($0) (\(key))" } ?? "Quit (\(key))")
     }
 
     private func addQuick() {
@@ -244,11 +331,49 @@ struct MenuBarView: View {
         quickStartAt = nil
         quickDue = nil
         quickPriority = 2
-        quickFocused = true
+        quickField = .text
     }
 }
 
 // MARK: - Row
+
+private struct LowerHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
+private struct ContentHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
+/// `MenuBarExtra` never resizes its panel when the SwiftUI content changes
+/// height, so the content shrinks inside an oversized window. This reads the
+/// measured height and resizes the hosting window to match, keeping the top
+/// left corner (the menu-bar anchor) fixed.
+private struct WindowSizer: NSViewRepresentable {
+    var width: CGFloat
+    var height: CGFloat
+
+    func makeNSView(context: Context) -> NSView { NSView(frame: .zero) }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        DispatchQueue.main.async {
+            guard height > 1, let window = nsView.window else { return }
+            let target = NSSize(width: width, height: height)
+            guard window.contentView?.frame.size != target else { return }
+            let topLeft = NSPoint(x: window.frame.minX, y: window.frame.maxY)
+            window.setContentSize(target)
+            var frame = window.frame
+            frame.origin = NSPoint(x: topLeft.x, y: topLeft.y - frame.height)
+            window.setFrame(frame, display: true)
+        }
+    }
+}
 
 struct ItemRow: View {
     @EnvironmentObject private var store: ItemStore
@@ -276,11 +401,15 @@ struct ItemRow: View {
                     }
                     Text(item.text)
                 }
-                if let start = item.startAt, item.hasUpcomingStart {
-                    StartChip(date: start)
-                }
-                if let due = item.dueAt {
-                    DueChip(date: due)
+                if (item.startAt != nil && item.hasUpcomingStart) || item.dueAt != nil {
+                    HStack(spacing: 4) {
+                        if let start = item.startAt, item.hasUpcomingStart {
+                            StartChip(date: start)
+                        }
+                        if let due = item.dueAt {
+                            DueChip(date: due)
+                        }
+                    }
                 }
                 if let detail = item.detail, !detail.isEmpty {
                     Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(2)
@@ -330,21 +459,19 @@ struct NoteRow: View {
     let note: Item
 
     var body: some View {
-        HStack(alignment: .top, spacing: 6) {
+        HStack(spacing: 4) {
             Image(systemName: "circle.dashed")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
-                .padding(.top, 2)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(note.text).lineLimit(2)
-                Text(note.createdAt.formatted(date: .abbreviated, time: .shortened))
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-            }
+            Text(note.text)
+                .font(.caption)
+                .lineLimit(1)
+                .truncationMode(.tail)
             Spacer(minLength: 0)
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 1)
         .contentShape(Rectangle())
+        .help(note.text)
         .contextMenu {
             Button("Journal it") { store.journalNote(id: note.id) }
             Button("Make into a task") { store.noteToTask(id: note.id) }
