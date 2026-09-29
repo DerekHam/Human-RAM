@@ -1,6 +1,23 @@
 import Foundation
 import Combine
 
+/// Window appearance. `.system` follows macOS; `.light`/`.dark` force a theme.
+public enum AppAppearance: String, CaseIterable, Identifiable {
+    case system
+    case light
+    case dark
+
+    public var id: String { rawValue }
+
+    public var label: String {
+        switch self {
+        case .system: return "System"
+        case .light: return "Light"
+        case .dark: return "Dark"
+        }
+    }
+}
+
 /// User preferences, persisted in UserDefaults.
 public final class AppSettings: ObservableObject {
     public static let shared = AppSettings()
@@ -24,6 +41,8 @@ public final class AppSettings: ObservableObject {
     @Published public var year: Int { didSet { defaults.set(year, forKey: "year") } }
     @Published public var launchAtLogin: Bool { didSet { defaults.set(launchAtLogin, forKey: "launchAtLogin") } }
     @Published public var showGuideOnLaunch: Bool { didSet { defaults.set(showGuideOnLaunch, forKey: "showGuideOnLaunch") } }
+    /// Window theme: follow the system, or force light/dark.
+    @Published public var appearance: AppAppearance { didSet { defaults.set(appearance.rawValue, forKey: "appearance") } }
     /// Anonymous check of the public GitHub Releases list for a newer version.
     @Published public var checkForUpdates: Bool { didSet { defaults.set(checkForUpdates, forKey: "checkForUpdates") } }
 
@@ -50,6 +69,7 @@ public final class AppSettings: ObservableObject {
             "year": Calendar.current.component(.year, from: Date()),
             "launchAtLogin": false,
             "showGuideOnLaunch": AppVariant.showsGuideByDefault,
+            "appearance": AppAppearance.system.rawValue,
             "checkForUpdates": true,
             "noteCapacity": 15,
             "noteReviewEnabled": true,
@@ -79,6 +99,7 @@ public final class AppSettings: ObservableObject {
         }
         launchAtLogin = defaults.bool(forKey: "launchAtLogin")
         showGuideOnLaunch = defaults.bool(forKey: "showGuideOnLaunch")
+        appearance = AppAppearance(rawValue: defaults.string(forKey: "appearance") ?? "") ?? .system
         checkForUpdates = defaults.bool(forKey: "checkForUpdates")
         noteCapacity = defaults.integer(forKey: "noteCapacity")
         noteReviewEnabled = defaults.bool(forKey: "noteReviewEnabled")

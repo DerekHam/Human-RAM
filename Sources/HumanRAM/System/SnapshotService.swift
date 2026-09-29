@@ -6,19 +6,25 @@ import HumanRAMCore
 /// each of its windows to an opaque PNG in that folder and quits. It captures
 /// its own content view, so it needs no Screen Recording permission.
 ///
-/// `HRAM_SNAPSHOT_APPEARANCE` is `light` (default) or `dark`, and
-/// `HRAM_SNAPSHOT_SUFFIX` is appended to each file name, so the caller can
-/// produce theme-matched sets (see `Scripts/screenshots.sh`).
+/// `HRAM_SNAPSHOT_APPEARANCE` forces `light` or `dark`; when unset the app's
+/// current theme is used. `HRAM_SNAPSHOT_SUFFIX` is appended to each file name,
+/// so the caller can produce theme-matched sets (see `Scripts/screenshots.sh`).
 enum SnapshotService {
     @discardableResult
     static func runIfRequested() -> Bool {
         guard let path = ProcessInfo.processInfo.environment["HRAM_SNAPSHOT_DIR"] else { return false }
         let env = ProcessInfo.processInfo.environment
         let suffix = env["HRAM_SNAPSHOT_SUFFIX"] ?? ""
-        let appearanceName: NSAppearance.Name = env["HRAM_SNAPSHOT_APPEARANCE"] == "dark" ? .darkAqua : .aqua
+        let appearanceName: NSAppearance.Name? = {
+            switch env["HRAM_SNAPSHOT_APPEARANCE"] {
+            case "dark": return .darkAqua
+            case "light": return .aqua
+            default: return nil
+            }
+        }()
         let dir = URL(fileURLWithPath: path, isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        NSApp.appearance = NSAppearance(named: appearanceName)
+        if let appearanceName { NSApp.appearance = NSAppearance(named: appearanceName) }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
             let steps: [(String, () -> NSWindow?)] = [
                 ("menu-bar", { standalone(MenuBarView().environmentObject(ItemStore.shared), size: CGSize(width: 440, height: 620)) }),
@@ -41,7 +47,7 @@ enum SnapshotService {
         steps: [(String, () -> NSWindow?)],
         dir: URL,
         suffix: String,
-        appearanceName: NSAppearance.Name,
+        appearanceName: NSAppearance.Name?,
         index: Int = 0
     ) {
         guard index < steps.count else {
@@ -50,7 +56,7 @@ enum SnapshotService {
         }
         let (name, setup) = steps[index]
         let target = setup()
-        target?.appearance = NSAppearance(named: appearanceName)
+        if let appearanceName { target?.appearance = NSAppearance(named: appearanceName) }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
             snapshot(target, name: name, suffix: suffix, appearanceName: appearanceName, into: dir)
             target?.orderOut(nil)
@@ -72,11 +78,16 @@ enum SnapshotService {
         NSApp.windows.first { $0.title == title }
     }
 
+    private static func isDark(_ appearanceName: NSAppearance.Name?) -> Bool {
+        if let appearanceName { return appearanceName == .darkAqua }
+        return NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+    }
+
     private static func snapshot(
         _ window: NSWindow?,
         name: String,
         suffix: String,
-        appearanceName: NSAppearance.Name,
+        appearanceName: NSAppearance.Name?,
         into dir: URL
     ) {
         guard let window, let view = window.contentView else { return }
@@ -92,7 +103,7 @@ enum SnapshotService {
         // on any theme (GitHub dark mode, etc.). Explicit colors, because the
         // dynamic system color does not resolve under a forced appearance. The
         // bitmap context is in pixels, so fill and draw over the full extent.
-        let background: NSColor = appearanceName == .darkAqua
+        let background: NSColor = isDark(appearanceName)
             ? NSColor(calibratedWhite: 0.12, alpha: 1)
             : NSColor(calibratedWhite: 0.93, alpha: 1)
         guard let finalRep = bitmap(size: bounds.size, scale: window.backingScaleFactor),

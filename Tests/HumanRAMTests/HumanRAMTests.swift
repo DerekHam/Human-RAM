@@ -609,6 +609,26 @@ final class HumanRAMTests: XCTestCase {
         XCTAssertEqual(release?.version, "0.2.1", "prerelease is ignored")
     }
 
+    // MARK: - Appearance
+
+    func testAppAppearanceOptions() {
+        XCTAssertEqual(AppAppearance.allCases.count, 3)
+        XCTAssertEqual(AppAppearance.system.label, "System")
+        XCTAssertEqual(AppAppearance.light.label, "Light")
+        XCTAssertEqual(AppAppearance.dark.label, "Dark")
+        XCTAssertEqual(AppAppearance(rawValue: "dark"), .dark)
+        XCTAssertNil(AppAppearance(rawValue: "neon"))
+    }
+
+    func testAppearanceSettingRoundTrips() {
+        let original = AppSettings.shared.appearance
+        defer { AppSettings.shared.appearance = original }
+        AppSettings.shared.appearance = .dark
+        XCTAssertEqual(AppSettings.shared.appearance, .dark)
+        AppSettings.shared.appearance = .light
+        XCTAssertEqual(AppSettings.shared.appearance, .light)
+    }
+
     func testUpdateEvaluationUpToDateReturnsNothing() throws {
         let json = Data("""
         [{"tag_name":"v0.2.0","name":"current","html_url":"https://example.com/c","body":"","draft":false,"prerelease":false}]

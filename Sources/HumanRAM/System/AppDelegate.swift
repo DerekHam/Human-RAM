@@ -1,12 +1,15 @@
 import AppKit
+import Combine
 import HumanRAMCore
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let taskHotKey = HotKey(id: 1)
     private var priorityMonitor: Any?
+    private var appearanceCancellable: AnyCancellable?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        applyAppearance()
         installRouter()
         registerHotKeys()
         installPriorityMonitor()
@@ -21,6 +24,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         showGuideIfNeeded()
         checkForUpdatesIfNeeded()
         SnapshotService.runIfRequested()
+    }
+
+    /// Applies the saved theme and keeps it in sync when Settings changes it.
+    private func applyAppearance() {
+        AppAppearanceController.apply(AppSettings.shared.appearance)
+        // No `receive(on:)`: the initial value must land synchronously so a
+        // later forced appearance (snapshot mode) is not overwritten async.
+        appearanceCancellable = AppSettings.shared.$appearance
+            .sink { AppAppearanceController.apply($0) }
     }
 
     /// One anonymous request to the public GitHub Releases list; opt out in Settings.

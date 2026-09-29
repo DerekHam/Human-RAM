@@ -80,6 +80,7 @@ Tasks and notes use separate capacities, separate intervals, and separate window
 - **Diary** (completed tasks) and **Journal** (filed notes), both grouped by day and searchable.
 - Convert a note into a task during review.
 - Launch at login.
+- Light and dark themes — follows macOS by default, or force either one from Settings.
 
 ---
 
@@ -275,6 +276,7 @@ Opens at the configured time when notes are pending. Reviews the inbox one note 
 | Notes: review at | 00:00 | Nightly review time. |
 | Notes: open review on launch | off | If on, the review opens at launch when its time already passed; off leaves it to its scheduled time, the notification, or the menu-bar **Review** button. |
 | Capture hotkey | `⌘⇧N` | Opens the capture box as a task; press `Tab` for a note. |
+| Theme | System | Follow macOS, or force **Light** / **Dark** for Human RAM only. |
 | Launch at login | off | Register via `SMAppService`. |
 | Check for updates | on | One anonymous request to the public GitHub Releases list; shows a menu-bar banner when a newer stable version exists. |
 | Guide at startup | on in shareable build | Show the welcome guide on launch; reopen from **Settings → Guide**. |
@@ -369,6 +371,7 @@ Sources/HumanRAM/             macOS app shell
     GuideView.swift           welcome / how-to shown on launch in shareable build
   System/
     AppDelegate.swift         startup, router wiring, hotkey registration, debug hooks
+    AppAppearanceController.swift  applies the System/Light/Dark theme choice
     SnapshotService.swift     HRAM_SNAPSHOT_DIR window-to-PNG screenshot pass
     HotKey.swift              Carbon global hotkeys (one instance per hotkey)
     CapturePanel.swift        floating NSPanel for capture
