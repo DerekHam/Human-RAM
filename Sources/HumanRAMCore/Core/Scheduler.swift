@@ -27,6 +27,7 @@ public final class Scheduler {
         started = true
 
         Notifications.shared.configure()
+        CalendarSync.shared.start(itemStore: store)
         scheduleDailyDigest()
         scheduleNoteReview(store: store)
 

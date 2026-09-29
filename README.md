@@ -82,6 +82,7 @@ Tasks and notes use separate capacities, separate intervals, and separate window
 - Convert a note into a task during review.
 - Launch at login.
 - Light and dark themes — follows macOS by default, or force either one from Settings.
+- **Optional calendar sync (one-way):** mirrors tasks with a start/due time into a calendar, with an alarm. Because your Mac's Calendar already syncs iCloud/Google/Outlook, those reminders reach your phone too — no server, no push, no account.
 
 ---
 
@@ -140,6 +141,10 @@ open "build/Human RAM.app"
 ### Cut a release
 
 ```bash
+# Sign with a real identity so macOS registers notifications. Ad-hoc builds
+# cannot notify. List yours with: security find-identity -v -p codesigning
+export HRAM_SIGN_ID="Apple Development: you@example.com (XXXXXXXXXX)"
+
 # Universal (arm64 + x86_64) shareable app -> build/Human-RAM-vX.Y.Z-macOS.dmg + .zip
 ./Scripts/release.sh release
 
@@ -148,7 +153,11 @@ open "build/Human RAM.app"
 ```
 
 Pushing a `v*` tag (or running the **Release** workflow manually) runs the tests
-and attaches the DMG, zip, and checksums to a GitHub Release.
+and attaches the DMG, zip, and checksums to a GitHub Release. To sign CI
+releases too, add repo secrets `HRAM_SIGN_P12` (base64 of a `.p12` with the cert
+and key), `HRAM_SIGN_P12_PASSWORD`, and `HRAM_KEYCHAIN_PASSWORD`; the workflow
+imports it into a temporary keychain and signs. Without those secrets the CI
+build falls back to ad-hoc (no notifications).
 
 `build_app.sh` runs `swift build`, assembles `build/Human RAM.app` (`Contents/MacOS`, `Info.plist`, `AppIcon.icns`) plus the `HumanRAMWidget.appex` in `Contents/PlugIns`, then signs both with the Apple Development identity and the App Group entitlement.
 
@@ -278,6 +287,8 @@ Opens at the configured time when notes are pending. Reviews the inbox one note 
 | Notes: open review on launch | off | If on, the review opens at launch when its time already passed; off leaves it to its scheduled time, the notification, or the menu-bar **Review** button. |
 | Capture hotkey | `⌘⇧N` | Opens the capture box as a task; press `Tab` for a note. |
 | Theme | System | Follow macOS, or force **Light** / **Dark** for Human RAM only. |
+| Add tasks to Calendar | off | One-way mirror of timed tasks into a calendar, with an alarm. |
+| Calendar | dedicated | The **Human RAM** calendar is created automatically; pick any writable calendar instead. |
 | Launch at login | off | Register via `SMAppService`. |
 | Check for updates | on | One anonymous request to the public GitHub Releases list; shows a menu-bar banner when a newer stable version exists. |
 | Guide at startup | on in shareable build | Show the welcome guide on launch; reopen from **Settings → Guide**. |
@@ -289,6 +300,7 @@ Opens at the configured time when notes are pending. Reviews the inbox one note 
 - **Location:** `~/Library/Application Support/HumanRAM/humanram.sqlite3` (WAL mode). The shareable build writes to `~/Library/Application Support/HumanRAM Shared/` instead, so the two never share data.
 - **Engine:** system `libsqlite3`, accessed through a thin wrapper (`Store/Database.swift`). No ORM.
 - **Inspecting it:** `sqlite3 "~/Library/Application Support/HumanRAM/humanram.sqlite3"`.
+- **Calendar:** with sync on, tasks with a time get an event in the chosen calendar (a dedicated **Human RAM** calendar by default). The link is just the event id stored on the row; the real data is still SQLite.
 - **Safety:** the database is copied to `Backups/` before every schema migration. **Settings → Your data** can back up on demand, reveal the files in Finder, and export/import the whole store as JSON. If the database is ever unreadable it is moved aside (`*.corrupt-<time>`) and the app starts fresh instead of crashing.
 
 ### Schema
@@ -351,6 +363,7 @@ Sources/HumanRAMCore/         portable: shared by macOS now, iOS later
     Scheduler.swift           due reminders, decay, daily scan, nightly review
     AppNotifications.swift    shared Notification.Name values
     UpdateChecker.swift       anonymous GitHub Releases update check
+    CalendarSync.swift        one-way EventKit mirror of timed tasks to a calendar
   UI/
     CaptureView.swift         capture overlay + CaptureModel + PriorityMenu
     DateTimeField.swift       MMDDHHMM numeric + calendar picker
@@ -448,7 +461,8 @@ Then update `reload()`, `insert()`, and `write()`, and add the column to the bas
 
 If you are an AI assistant working in this repo, keep these in mind:
 
-- **This is a personal, offline app.** The only network call is the anonymous GitHub Releases update check (`Core/UpdateChecker.swift`); do not add accounts, analytics, tracking, or third-party dependencies without an explicit request.
+- **This is a personal, offline app.** The only network call is the anonymous GitHub Releases update check (`Core/UpdateChecker.swift`). Calendar sync is local EventKit (`Core/CalendarSync.swift`) and never leaves the Mac. Do not add accounts, analytics, tracking, or third-party dependencies without an explicit request.
+- **Calendar sync is one-way and best-effort.** `CalendarSync` owns `calendar_event_id` on each item (metadata, not a user edit — it must not bump `updatedAt`/`dirty`). Never read Calendar edits back. Keep tasks and notes separated here too: only tasks with a time are mirrored.
 - **No comments in code** unless the user asks. Match the existing concise Swift style.
 - **Keep tasks and notes separated.** Use distinct `ItemState` cases for anything note-related; never route notes through task queries (`loaded`, `backlog`, `completed`, `enforceCapacity`, `applyDecay`, `badgeCount`).
 - **Respect the invariants** above: `ItemStore` owns state; UI never writes SQL directly.
@@ -470,6 +484,8 @@ If you are an AI assistant working in this repo, keep these in mind:
 - The notes inbox soft-caps: it flags **FULL** past capacity and never auto-files, rather than refusing captures.
 - **Not notarized.** Releases are ad-hoc signed, not signed with a paid Apple Developer certificate, so macOS warns on first launch. The Homebrew cask and the DMG's **Fix Gatekeeper.command** both clear the quarantine flag; there is no way to remove the warning without a $99/yr Developer ID.
 - **No widget in the released build.** The shareable app ships without the widget extension, because App Groups require a real Team ID. The widget is available in the locally built full app (`build_app.sh`).
+- **Notifications need a real signature.** Ad-hoc builds cannot register with macOS notifications (`Notifications are not allowed for this application`). Sign with an Apple Development or Developer ID identity (`HRAM_SIGN_ID`) and grant permission once. **Settings → Notifications** shows the status and can send a test. Tasks only remind if they have a due time in the future.
+- **Calendar sync is one-way.** Events are created/updated/deleted from tasks; edits made in Calendar are not read back. Requires Calendars permission (`NSCalendarsFullAccessUsageDescription`).
 - `build_app.sh` produces a Developer ID / Apple Development–signed bundle (needs `HRAM_SIGN_ID`); `build_app_adhoc.sh`, `build_share.sh`, and `release.sh` produce ad-hoc signed bundles.
 - The daily scan opens at its trigger time (or on launch, if its time already passed and it hasn't run that day). The nightly review opens at the trigger time while the app is running, from the notification, or from the menu-bar **Review** button; it only opens at launch when **Open review on launch** is enabled.
 

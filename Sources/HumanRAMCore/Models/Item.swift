@@ -46,6 +46,8 @@ public struct Item: Identifiable, Equatable, Codable {
     public var deleted: Bool = false
     /// True when the row has local changes that still need to be pushed.
     public var dirty: Bool = true
+    /// EventKit identifier for the mirrored calendar event, when calendar sync is on.
+    public var calendarEventId: String?
 
     public init(
         id: UUID = UUID(),
@@ -63,7 +65,8 @@ public struct Item: Identifiable, Equatable, Codable {
         pinned: Bool = false,
         updatedAt: Date = Date(),
         deleted: Bool = false,
-        dirty: Bool = true
+        dirty: Bool = true,
+        calendarEventId: String? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -81,6 +84,7 @@ public struct Item: Identifiable, Equatable, Codable {
         self.updatedAt = updatedAt
         self.deleted = deleted
         self.dirty = dirty
+        self.calendarEventId = calendarEventId
     }
 
     public var isNote: Bool { kind == .note }

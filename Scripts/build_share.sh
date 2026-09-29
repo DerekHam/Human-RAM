@@ -41,8 +41,14 @@ if [ -f "$ROOT/Resources/Assets/AppIcon.icns" ]; then
     cp "$ROOT/Resources/Assets/AppIcon.icns" "$APP_DIR/Contents/Resources/AppIcon.icns"
 fi
 
-echo "==> ad-hoc codesign"
-codesign --force --deep --sign - "$APP_DIR"
+if [ -n "${HRAM_SIGN_ID:-}" ]; then
+    echo "==> codesign ($HRAM_SIGN_ID)"
+    codesign --force --deep --sign "$HRAM_SIGN_ID" "$APP_DIR"
+else
+    echo "==> ad-hoc codesign (set HRAM_SIGN_ID to sign with a real identity;"
+    echo "    ad-hoc builds cannot register for macOS notifications)"
+    codesign --force --deep --sign - "$APP_DIR"
+fi
 
 echo "==> done: $APP_DIR"
 echo "    bundle id:   $BUNDLE_ID"

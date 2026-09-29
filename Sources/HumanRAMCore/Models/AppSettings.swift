@@ -43,6 +43,11 @@ public final class AppSettings: ObservableObject {
     @Published public var showGuideOnLaunch: Bool { didSet { defaults.set(showGuideOnLaunch, forKey: "showGuideOnLaunch") } }
     /// Window theme: follow the system, or force light/dark.
     @Published public var appearance: AppAppearance { didSet { defaults.set(appearance.rawValue, forKey: "appearance") } }
+    /// Mirror tasks with times into a calendar so alerts reach phones too.
+    @Published public var calendarSyncEnabled: Bool { didSet { defaults.set(calendarSyncEnabled, forKey: "calendarSyncEnabled") } }
+    /// `EKCalendar.calendarIdentifier` to write to; empty means the dedicated
+    /// "Human RAM" calendar.
+    @Published public var calendarIdentifier: String { didSet { defaults.set(calendarIdentifier, forKey: "calendarIdentifier") } }
     /// Anonymous check of the public GitHub Releases list for a newer version.
     @Published public var checkForUpdates: Bool { didSet { defaults.set(checkForUpdates, forKey: "checkForUpdates") } }
 
@@ -70,6 +75,8 @@ public final class AppSettings: ObservableObject {
             "launchAtLogin": false,
             "showGuideOnLaunch": AppVariant.showsGuideByDefault,
             "appearance": AppAppearance.system.rawValue,
+            "calendarSyncEnabled": false,
+            "calendarIdentifier": "",
             "checkForUpdates": true,
             "noteCapacity": 15,
             "noteReviewEnabled": true,
@@ -100,6 +107,8 @@ public final class AppSettings: ObservableObject {
         launchAtLogin = defaults.bool(forKey: "launchAtLogin")
         showGuideOnLaunch = defaults.bool(forKey: "showGuideOnLaunch")
         appearance = AppAppearance(rawValue: defaults.string(forKey: "appearance") ?? "") ?? .system
+        calendarSyncEnabled = defaults.bool(forKey: "calendarSyncEnabled")
+        calendarIdentifier = defaults.string(forKey: "calendarIdentifier") ?? ""
         checkForUpdates = defaults.bool(forKey: "checkForUpdates")
         noteCapacity = defaults.integer(forKey: "noteCapacity")
         noteReviewEnabled = defaults.bool(forKey: "noteReviewEnabled")

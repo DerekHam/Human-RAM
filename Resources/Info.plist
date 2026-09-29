@@ -30,5 +30,9 @@
     <true/>
     <key>NSUserNotificationAlertStyle</key>
     <string>alert</string>
+    <key>NSCalendarsFullAccessUsageDescription</key>
+    <string>Human RAM adds your tasks with times to a calendar so reminders can reach your phone.</string>
+    <key>NSCalendarsUsageDescription</key>
+    <string>Human RAM adds your tasks with times to a calendar so reminders can reach your phone.</string>
 </dict>
 </plist>

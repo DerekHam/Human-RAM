@@ -3,6 +3,20 @@
 All notable changes to Human RAM are documented here. This project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Calendar sync (one-way).** Optionally mirror tasks with a start or due time
+  into a calendar as events with alarms, so reminders also reach your phone via
+  iCloud/Google/Outlook. A dedicated **Human RAM** calendar is created by
+  default; any writable calendar can be chosen instead. Settings → Calendar.
+- **Notification status in Settings**, with a test notification and a shortcut
+  to System Settings, so it's clear when macOS has blocked alerts.
+- **Optional release signing.** `build_share.sh` / `release.sh` sign with
+  `HRAM_SIGN_ID` when set (required for macOS notifications); the Release
+  workflow can import a certificate from repo secrets.
+
 ## [0.2.2] - 2026-09-29
 
 ### Added

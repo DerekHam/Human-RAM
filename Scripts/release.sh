@@ -22,6 +22,14 @@ if [ -f "$ROOT/Casks/human-ram.rb" ]; then
     sed -i '' -E "s/^  version \".*\"/  version \"$VERSION\"/" "$ROOT/Casks/human-ram.rb"
 fi
 
+if [ -n "${HRAM_SIGN_ID:-}" ]; then
+    echo "==> signing with: $HRAM_SIGN_ID"
+else
+    echo "==> WARNING: HRAM_SIGN_ID is not set; the build will be ad-hoc signed, which"
+    echo "    macOS will not register for notifications. For a notification-capable"
+    echo "    release run: export HRAM_SIGN_ID='Apple Development: you@example.com (XXXXXXXXXX)'"
+fi
+
 echo "==> building $APP_NAME $VERSION"
 HRAM_UNIVERSAL="${HRAM_UNIVERSAL:-1}" "$ROOT/Scripts/build_share.sh" "$CONFIG"
 

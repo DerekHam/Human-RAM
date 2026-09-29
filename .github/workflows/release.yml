@@ -15,11 +15,37 @@ permissions:
 jobs:
   package:
     runs-on: macos-14
+    # Optional: set these repo secrets to sign releases with a real identity
+    # (required for macOS notifications). Without them the build is ad-hoc.
+    #   HRAM_SIGN_P12            base64 of a .p12 containing the signing cert + key
+    #   HRAM_SIGN_P12_PASSWORD   password for that .p12
+    #   HRAM_KEYCHAIN_PASSWORD   any throwaway password for the temp keychain
+    env:
+      HRAM_SIGN_P12: ${{ secrets.HRAM_SIGN_P12 }}
+      HRAM_SIGN_P12_PASSWORD: ${{ secrets.HRAM_SIGN_P12_PASSWORD }}
+      HRAM_KEYCHAIN_PASSWORD: ${{ secrets.HRAM_KEYCHAIN_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Run tests
         run: swift test
+
+      - name: Import signing certificate
+        if: ${{ env.HRAM_SIGN_P12 != '' }}
+        run: |
+          echo "$HRAM_SIGN_P12" | base64 --decode > /tmp/hram-cert.p12
+          KEYCHAIN="hram-signing.keychain-db"
+          security create-keychain -p "$HRAM_KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$HRAM_KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import /tmp/hram-cert.p12 -k "$KEYCHAIN" \
+            -P "$HRAM_SIGN_P12_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: \
+            -s -k "$HRAM_KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null
+          rm -f /tmp/hram-cert.p12
+          IDENTITY="$(security find-identity -v -p codesigning "$KEYCHAIN" | grep -m1 '"' | sed -E 's/.*"(.*)"/\1/')"
+          echo "Signing identity: $IDENTITY"
+          echo "HRAM_SIGN_ID=$IDENTITY" >> "$GITHUB_ENV"
 
       - name: Build universal DMG + zip
         env:

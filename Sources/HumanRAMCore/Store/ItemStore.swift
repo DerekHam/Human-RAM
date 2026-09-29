@@ -23,7 +23,7 @@ public final class ItemStore: ObservableObject {
 
     /// Bumped whenever the schema changes so an upgrade can snapshot the old
     /// database before migrating it.
-    public static let schemaVersion = 4
+    public static let schemaVersion = 5
 
     /// Every row, including tombstones (`deleted == true`). UI queries filter deleted rows;
     /// tombstones are kept so removals can propagate during sync.
@@ -116,7 +116,8 @@ public final class ItemStore: ObservableObject {
             pinned       INTEGER NOT NULL DEFAULT 0,
             updated_at   REAL,
             deleted      INTEGER NOT NULL DEFAULT 0,
-            dirty        INTEGER NOT NULL DEFAULT 0
+            dirty        INTEGER NOT NULL DEFAULT 0,
+            calendar_event_id TEXT
         );
         """)
         // Additive migration for databases created before notes existed.
@@ -138,6 +139,9 @@ public final class ItemStore: ObservableObject {
         if !columnExists("dirty", in: "items") {
             db.exec("ALTER TABLE items ADD COLUMN dirty INTEGER NOT NULL DEFAULT 0;")
             db.exec("UPDATE items SET dirty = 1;")
+        }
+        if !columnExists("calendar_event_id", in: "items") {
+            db.exec("ALTER TABLE items ADD COLUMN calendar_event_id TEXT;")
         }
         // Notes have no priority; clear any legacy values so old rows stop
         // carrying one.
@@ -243,7 +247,8 @@ public final class ItemStore: ObservableObject {
         var loaded: [Item] = []
         db.query("""
         SELECT id, kind, text, detail, due_at, state, priority, created_at, loaded_at,
-               touched_at, completed_at, pinned, start_at, updated_at, deleted, dirty
+               touched_at, completed_at, pinned, start_at, updated_at, deleted, dirty,
+               calendar_event_id
         FROM items
         """) { row in
             guard
@@ -268,7 +273,8 @@ public final class ItemStore: ObservableObject {
                 pinned: row.bool(11),
                 updatedAt: row.date(13) ?? row.date(9) ?? Date(),
                 deleted: row.bool(14),
-                dirty: row.bool(15)
+                dirty: row.bool(15),
+                calendarEventId: row.string(16)
             ))
         }
         items = loaded
@@ -576,12 +582,12 @@ public final class ItemStore: ObservableObject {
         db.run("""
         INSERT INTO items (id, kind, text, detail, due_at, state, priority, created_at,
                            loaded_at, touched_at, completed_at, pinned, start_at,
-                           updated_at, deleted, dirty)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                           updated_at, deleted, dirty, calendar_event_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, [
             item.id.uuidString, item.kind.rawValue, item.text, item.detail, item.dueAt, item.state.rawValue,
             item.priority, item.createdAt, item.loadedAt, item.touchedAt, item.completedAt, item.pinned,
-            item.startAt, item.updatedAt, item.deleted, item.dirty,
+            item.startAt, item.updatedAt, item.deleted, item.dirty, item.calendarEventId,
         ])
     }
 
@@ -589,12 +595,21 @@ public final class ItemStore: ObservableObject {
         db.run("""
         UPDATE items SET kind = ?, text = ?, detail = ?, due_at = ?, state = ?, priority = ?,
                          created_at = ?, loaded_at = ?, touched_at = ?, completed_at = ?, pinned = ?,
-                         start_at = ?, updated_at = ?, deleted = ?, dirty = ?
+                         start_at = ?, updated_at = ?, deleted = ?, dirty = ?, calendar_event_id = ?
         WHERE id = ?
         """, [
             item.kind.rawValue, item.text, item.detail, item.dueAt, item.state.rawValue, item.priority,
             item.createdAt, item.loadedAt, item.touchedAt, item.completedAt, item.pinned,
-            item.startAt, item.updatedAt, item.deleted, item.dirty, item.id.uuidString,
+            item.startAt, item.updatedAt, item.deleted, item.dirty, item.calendarEventId, item.id.uuidString,
         ])
+    }
+
+    /// Records the mirrored calendar event id. Deliberately not a user edit: it
+    /// must not bump `updatedAt`/`dirty` (that would fight calendar sync).
+    func setCalendarEventId(_ eventID: String?, for itemID: UUID) {
+        guard let idx = items.firstIndex(where: { $0.id == itemID }) else { return }
+        guard items[idx].calendarEventId != eventID else { return }
+        items[idx].calendarEventId = eventID
+        db.run("UPDATE items SET calendar_event_id = ? WHERE id = ?", [eventID, itemID.uuidString])
     }
 }

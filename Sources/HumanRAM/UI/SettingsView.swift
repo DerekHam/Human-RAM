@@ -12,6 +12,8 @@ struct SettingsView: View {
     @State private var reviewTime = Date()
     @State private var dataMessage: String?
     @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
+    @State private var calendarPermission: CalendarSync.Permission = .notDetermined
+    @State private var calendars: [CalendarSync.CalendarOption] = []
 
     private var appVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—"
@@ -129,6 +131,34 @@ struct SettingsView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
 
+            Section("Calendar") {
+                Toggle("Add tasks to Calendar", isOn: $settings.calendarSyncEnabled)
+                    .onChange(of: settings.calendarSyncEnabled) { _, enabled in
+                        if enabled, calendarPermission == .notDetermined {
+                            CalendarSync.shared.requestAccess { _ in refreshCalendar() }
+                        }
+                        refreshCalendar()
+                    }
+                switch calendarPermission {
+                case .authorized:
+                    Picker("Calendar", selection: $settings.calendarIdentifier) {
+                        Text("Human RAM (dedicated)").tag("")
+                        ForEach(calendars) { calendar in
+                            Text(calendar.displayName).tag(calendar.id)
+                        }
+                    }
+                    .disabled(!settings.calendarSyncEnabled)
+                case .notDetermined:
+                    Button("Allow Calendar Access") {
+                        CalendarSync.shared.requestAccess { _ in refreshCalendar() }
+                    }
+                case .denied:
+                    Button("Open Calendar Privacy Settings…") { openCalendarSettings() }
+                }
+                Text("Mirrors tasks with a start or due time as calendar events, one-way, with an alarm. Because your Mac syncs iCloud/Google/Outlook calendars, those reminders also reach your phone. Events are never edited back into Human RAM.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
             Section("Capture hotkey") {
                 LabeledContent("Shortcut",
                                value: HotKeyDescriptor.string(keyCode: settings.hotkeyKeyCode,
@@ -229,6 +259,7 @@ struct SettingsView: View {
             reviewTime = Calendar.current.date(from: rcomps) ?? Date()
             updates.checkIfEnabled()
             refreshNotificationStatus()
+            refreshCalendar()
         }
     }
 
@@ -249,6 +280,17 @@ struct SettingsView: View {
 
     private func openNotificationSettings() {
         if let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    private func refreshCalendar() {
+        calendarPermission = CalendarSync.shared.permission()
+        calendars = CalendarSync.shared.availableCalendars()
+    }
+
+    private func openCalendarSettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars") {
             NSWorkspace.shared.open(url)
         }
     }
