@@ -1,6 +1,7 @@
 # Human RAM
 
 [![Latest release](https://img.shields.io/github/v/release/DerekHam/Human-RAM?label=download&color=blue)](https://github.com/DerekHam/Human-RAM/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/DerekHam/Human-RAM/total?label=downloads&color=brightgreen)](https://github.com/DerekHam/Human-RAM/releases)
 [![CI](https://github.com/DerekHam/Human-RAM/actions/workflows/ci.yml/badge.svg)](https://github.com/DerekHam/Human-RAM/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 ![Platform: macOS 14+](https://img.shields.io/badge/platform-macOS%2014%2B-lightgrey)
