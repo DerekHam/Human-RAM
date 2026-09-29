@@ -1,0 +1,34 @@
+Human RAM — install
+
+Human RAM is a free, open-source, offline macOS app. It is not signed with a
+paid Apple Developer certificate, so macOS will warn the first time you open it.
+
+EASY WAY (recommended)
+
+    1. Drag "Human RAM (Shareable).app" into your Applications folder.
+    2. Double-click "Fix Gatekeeper.command" in this window.
+       (Or, if you prefer the mouse: Control-click the app > Open > Open.)
+    3. Open Human RAM. Look for the memory-chip icon in the menu bar.
+    4. macOS asks permission for notifications — accept it, or due reminders
+       won't appear.
+
+COMMAND-LINE WAY
+
+    xattr -dr com.apple.quarantine "/Applications/Human RAM (Shareable).app"
+
+HOMEBREW (no warning at all)
+
+    brew tap DerekHam/human-ram
+    brew install --cask human-ram
+
+FIRST RUN
+
+    - Human RAM has no Dock icon. It lives in the menu bar.
+    - Press Command-Shift-N anywhere to capture a thought as a task.
+      Press Tab in the capture box to jot a note instead.
+    - Your data stays on your Mac:
+      ~/Library/Application Support/HumanRAM Shared/humanram.sqlite3
+
+Requires macOS 14 (Sonoma) or later.
+
+Questions or bugs: https://github.com/DerekHam/Human-RAM/issues

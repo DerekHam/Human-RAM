@@ -20,7 +20,7 @@ public enum ItemState: String, Codable, CaseIterable {
     case journaled
 }
 
-public struct Item: Identifiable, Equatable {
+public struct Item: Identifiable, Equatable, Codable {
     public var id: UUID = UUID()
     public var kind: ItemKind = .task
     public var text: String

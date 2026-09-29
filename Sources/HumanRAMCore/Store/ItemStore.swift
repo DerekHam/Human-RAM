@@ -3,15 +3,36 @@ import Combine
 import WidgetKit
 import HumanRAMShared
 
+/// Versioned, portable snapshot of the whole store, used for export/import
+/// (manual backups and device migration).
+public struct ItemArchive: Codable {
+    public var version: Int
+    public var exportedAt: Date
+    public var items: [Item]
+
+    public init(version: Int = 1, exportedAt: Date = Date(), items: [Item]) {
+        self.version = version
+        self.exportedAt = exportedAt
+        self.items = items
+    }
+}
+
 /// In-memory working copy of all items, write-through to SQLite.
 public final class ItemStore: ObservableObject {
     public static let shared = ItemStore()
 
+    /// Bumped whenever the schema changes so an upgrade can snapshot the old
+    /// database before migrating it.
+    public static let schemaVersion = 4
+
     /// Every row, including tombstones (`deleted == true`). UI queries filter deleted rows;
     /// tombstones are kept so removals can propagate during sync.
     @Published public private(set) var items: [Item] = []
-    private let db: Database
+    private var db: Database
     private let sharesWithWidget: Bool
+    public let databaseURL: URL
+    /// Set when an unreadable database was moved aside on launch so the UI can say so.
+    public private(set) var quarantinedDatabaseURL: URL?
     private var cancellables = Set<AnyCancellable>()
 
     private init() {
@@ -27,13 +48,36 @@ public final class ItemStore: ObservableObject {
             try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
             path = dir.appendingPathComponent("humanram.sqlite3").path
         }
+        databaseURL = URL(fileURLWithPath: path)
+        let existed = FileManager.default.fileExists(atPath: path)
         db = Database(path: path)
-        migrate()
+        // Never crash on a damaged file: move it aside and start clean.
+        var migratedFromExistingFile = existed
+        if existed && (!db.isOpen || !db.quickCheck()) {
+            quarantineCorruptDatabase()
+            db = Database(path: path)
+            migratedFromExistingFile = false
+        }
+        migrate(wasExistingDatabase: migratedFromExistingFile)
         reload()
         $items
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.publishWidgetSnapshot() }
             .store(in: &cancellables)
+    }
+
+    private func quarantineCorruptDatabase() {
+        db.close()
+        let fm = FileManager.default
+        let stamp = Int(Date().timeIntervalSince1970)
+        let moved = databaseURL.path + ".corrupt-\(stamp)"
+        // Fold the WAL into the main file first so the quarantined copy is complete.
+        try? fm.moveItem(atPath: databaseURL.path, toPath: moved)
+        for suffix in ["-wal", "-shm"] {
+            try? fm.removeItem(atPath: databaseURL.path + suffix)
+        }
+        quarantinedDatabaseURL = URL(fileURLWithPath: moved)
+        NSLog("HumanRAM: database failed its integrity check; moved to \(moved) and started fresh.")
     }
 
     private func publishWidgetSnapshot() {
@@ -47,7 +91,14 @@ public final class ItemStore: ObservableObject {
 
     // MARK: - Schema
 
-    private func migrate() {
+    private func migrate(wasExistingDatabase: Bool) {
+        guard db.isOpen else { return }
+        let existingVersion = schemaVersionOnDisk()
+        // Snapshot the old file before applying an additive migration so an
+        // upgrade can always be rolled back by hand.
+        if wasExistingDatabase && existingVersion < Self.schemaVersion {
+            backupDatabase(label: "pre-\(existingVersion)")
+        }
         db.exec("""
         CREATE TABLE IF NOT EXISTS items (
             id           TEXT PRIMARY KEY,
@@ -99,6 +150,13 @@ public final class ItemStore: ObservableObject {
         db.exec("CREATE INDEX IF NOT EXISTS idx_items_completed ON items(completed_at);")
         db.exec("CREATE INDEX IF NOT EXISTS idx_items_kind ON items(kind);")
         db.exec("CREATE INDEX IF NOT EXISTS idx_items_dirty ON items(dirty);")
+        db.exec("PRAGMA user_version = \(Self.schemaVersion);")
+    }
+
+    private func schemaVersionOnDisk() -> Int {
+        var version = 0
+        db.query("PRAGMA user_version;") { row in version = row.int(0) }
+        return version
     }
 
     private func columnExists(_ column: String, in table: String) -> Bool {
@@ -107,6 +165,76 @@ public final class ItemStore: ObservableObject {
             if row.string(1) == column { found = true }
         }
         return found
+    }
+
+    // MARK: - Backup / export
+
+    /// A point-in-time copy of the database, in a `Backups` folder beside it.
+    @discardableResult
+    public func backupDatabase(label: String = "manual") -> URL? {
+        guard db.isOpen else { return nil }
+        db.checkpoint()
+        let fm = FileManager.default
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd-HHmmss"
+        let stamp = formatter.string(from: Date())
+        let dir = databaseURL.deletingLastPathComponent().appendingPathComponent("Backups", isDirectory: true)
+        try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        let dest = dir.appendingPathComponent("humanram-\(label)-\(stamp).sqlite3")
+        do {
+            if fm.fileExists(atPath: dest.path) { try fm.removeItem(at: dest) }
+            try fm.copyItem(at: databaseURL, to: dest)
+            return dest
+        } catch {
+            NSLog("HumanRAM backup failed: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    /// All items (including tombstones) as a portable JSON archive.
+    public func exportArchiveData(pretty: Bool = true) throws -> Data {
+        let archive = ItemArchive(exportedAt: Date(), items: items)
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        if pretty {
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        }
+        return try encoder.encode(archive)
+    }
+
+    /// Merges a JSON archive by UUID, keeping the newer mutation for each item.
+    /// Returns the number of items added or updated. Any archive shape is
+    /// tolerated; malformed input throws instead of mutating the store.
+    @discardableResult
+    public func importArchive(_ data: Data) throws -> Int {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let archive = try decoder.decode(ItemArchive.self, from: data)
+        var imported = 0
+        db.transaction {
+            for incoming in archive.items {
+                if let idx = items.firstIndex(where: { $0.id == incoming.id }) {
+                    guard incoming.updatedAt > items[idx].updatedAt else { continue }
+                    var merged = incoming
+                    merged.dirty = true
+                    items[idx] = merged
+                    write(merged)
+                    imported += 1
+                } else {
+                    var fresh = incoming
+                    fresh.dirty = true
+                    items.append(fresh)
+                    insert(fresh)
+                    imported += 1
+                }
+            }
+        }
+        if imported > 0 {
+            enforceCapacity()
+            applyTimeWindow()
+            fillWorkingSet()
+        }
+        return imported
     }
 
     // MARK: - Loading

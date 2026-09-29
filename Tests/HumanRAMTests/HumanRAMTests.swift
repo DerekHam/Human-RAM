@@ -538,4 +538,83 @@ final class HumanRAMTests: XCTestCase {
         XCTAssertTrue(keyEvent(48, [], "\t").map(Shortcuts.isTab) ?? false)
         XCTAssertTrue(keyEvent(53, [], "\u{1b}").map(Shortcuts.isCancel) ?? false)
     }
+
+    // MARK: - Export / import
+
+    func testArchiveRoundTripRestoresItems() throws {
+        clearAll()
+        store.add(text: "pay rent", priority: 3)
+        store.addNote(text: "essay idea")
+
+        let data = try store.exportArchiveData()
+        clearAll()
+        XCTAssertTrue(store.items.filter { !$0.deleted }.isEmpty, "store is empty before import")
+
+        let imported = try store.importArchive(data)
+        XCTAssertEqual(imported, 2, "both items come back")
+        XCTAssertTrue(store.loaded.contains { $0.text == "pay rent" })
+        XCTAssertEqual(store.notesInbox.first?.text, "essay idea")
+    }
+
+    func testImportKeepsNewestMutation() throws {
+        clearAll()
+        let item = store.add(text: "old text")
+        let archive = try store.exportArchiveData()
+
+        var edited = item
+        edited.text = "newer text"
+        edited.updatedAt = Date().addingTimeInterval(60)
+        store.update(edited)
+
+        let changed = try store.importArchive(archive)
+        XCTAssertEqual(changed, 0, "an older archive does not clobber a newer edit")
+        XCTAssertEqual(store.item(id: item.id)?.text, "newer text")
+    }
+
+    func testImportGarbageThrowsWithoutMutating() {
+        clearAll()
+        store.add(text: "keep me")
+        let before = store.items.count
+        XCTAssertThrowsError(try store.importArchive(Data("not json".utf8)))
+        XCTAssertEqual(store.items.count, before, "a failed import changes nothing")
+    }
+
+    func testBackupWritesACopy() throws {
+        clearAll()
+        store.add(text: "backup target")
+        let url = try XCTUnwrap(store.backupDatabase(label: "test"))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: url.path))
+        XCTAssertTrue(url.lastPathComponent.contains("test"))
+    }
+
+    // MARK: - Update checker
+
+    func testVersionComparison() {
+        XCTAssertTrue(UpdateChecker.isNewer([0, 2, 1], than: [0, 2, 0]))
+        XCTAssertFalse(UpdateChecker.isNewer([0, 2, 0], than: [0, 2, 0]))
+        XCTAssertTrue(UpdateChecker.isNewer([1, 0, 0], than: [0, 9, 9]))
+        XCTAssertTrue(UpdateChecker.isNewer([0, 3], than: [0, 2, 9]))
+    }
+
+    func testUpdateEvaluationPicksNewestStable() throws {
+        let json = Data("""
+        [
+          {"tag_name":"v0.3.0","name":"beta","html_url":"https://example.com/b","body":"","draft":false,"prerelease":true},
+          {"tag_name":"v0.2.1","name":"patch","html_url":"https://example.com/p","body":"","draft":false,"prerelease":false},
+          {"tag_name":"v0.2.0","name":"old","html_url":"https://example.com/o","body":"","draft":false,"prerelease":false}
+        ]
+        """.utf8)
+        let result = UpdateChecker.evaluate(data: json, error: nil, currentVersion: "0.2.0")
+        guard case .success(let release) = result else { return XCTFail("expected success") }
+        XCTAssertEqual(release?.version, "0.2.1", "prerelease is ignored")
+    }
+
+    func testUpdateEvaluationUpToDateReturnsNothing() throws {
+        let json = Data("""
+        [{"tag_name":"v0.2.0","name":"current","html_url":"https://example.com/c","body":"","draft":false,"prerelease":false}]
+        """.utf8)
+        let result = UpdateChecker.evaluate(data: json, error: nil, currentVersion: "0.2.0")
+        guard case .success(let release) = result else { return XCTFail("expected success") }
+        XCTAssertNil(release)
+    }
 }

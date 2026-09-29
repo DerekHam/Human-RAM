@@ -47,7 +47,7 @@ struct GuideView: View {
                     .font(.title3).foregroundStyle(.secondary)
                 Text("by Derek Han")
                     .font(.caption).foregroundStyle(.tertiary)
-                Text("Early preview — still under development")
+                Text("Version \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "") — stable preview")
                     .font(.caption2).foregroundStyle(.tertiary)
             }
         }
@@ -111,7 +111,7 @@ struct GuideView: View {
                 destinationRow("sun.max", "Scan — today's plan, overdue, upcoming, and the hard drive.")
                 destinationRow("book", "Diary — everything you've finished, by day.")
                 destinationRow("brain", "Journal — every note you've filed.")
-                destinationRow("gearshape", "Settings — capacity, schedule, and hotkeys.")
+                destinationRow("gearshape", "Settings — capacity, schedule, hotkeys, backups, and updates.")
             }
         }
     }
@@ -120,7 +120,7 @@ struct GuideView: View {
         card {
             VStack(alignment: .leading, spacing: 6) {
                 sectionTitle("Your data", icon: "lock")
-                Text("Human RAM runs entirely offline. There is no account, no sync, no cloud. Everything stays on this Mac:")
+                Text("Human RAM runs entirely offline. There is no account, no sync, no cloud, and no tracking. The only network request is an optional update check you can turn off in Settings. Everything stays on this Mac:")
                     .font(.callout).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 Text("~/Library/Application Support/\(AppVariant.storageFolderName)/humanram.sqlite3")

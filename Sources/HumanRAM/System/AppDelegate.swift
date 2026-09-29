@@ -19,6 +19,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Scheduler.shared.start(store: ItemStore.shared)
         runDebugHooksIfNeeded()
         showGuideIfNeeded()
+        checkForUpdatesIfNeeded()
+        SnapshotService.runIfRequested()
+    }
+
+    /// One anonymous request to the public GitHub Releases list; opt out in Settings.
+    private func checkForUpdatesIfNeeded() {
+        guard AppSettings.shared.checkForUpdates else { return }
+        UpdateChecker.shared.check()
     }
 
     private func showGuideIfNeeded() {

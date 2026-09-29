@@ -1,11 +1,19 @@
 import SwiftUI
+import AppKit
+import UniformTypeIdentifiers
 import ServiceManagement
 import HumanRAMCore
 
 struct SettingsView: View {
     @ObservedObject private var settings = AppSettings.shared
+    @ObservedObject private var updates = UpdateChecker.shared
     @State private var scanTime = Date()
     @State private var reviewTime = Date()
+    @State private var dataMessage: String?
+
+    private var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—"
+    }
 
     private var windowLabel: String {
         let hours = settings.ramWindowHours
@@ -15,6 +23,22 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
+            if let quarantined = ItemStore.shared.quarantinedDatabaseURL {
+                Section {
+                    Label("A damaged database was found and set aside. Human RAM started fresh; the old file is kept below.",
+                          systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                    Button("Reveal set-aside database") {
+                        NSWorkspace.shared.activateFileViewerSelecting([quarantined])
+                    }
+                }
+            }
+            if let message = dataMessage {
+                Section {
+                    Text(message).font(.callout)
+                }
+            }
+
             Section("Working memory") {
                 Stepper(value: $settings.workingSetLimit, in: 1...50) {
                     LabeledContent("RAM capacity", value: "\(settings.workingSetLimit)")
@@ -114,7 +138,50 @@ struct SettingsView: View {
                 Stepper("Adjust year", value: $settings.year, in: 2000...2100)
             }
 
+            Section("Your data") {
+                Button("Back up the database now") {
+                    if let url = ItemStore.shared.backupDatabase(label: "manual") {
+                        dataMessage = "Backup saved to \(url.lastPathComponent)."
+                        NSWorkspace.shared.activateFileViewerSelecting([url])
+                    } else {
+                        dataMessage = "Could not create a backup."
+                    }
+                }
+                Button("Show database in Finder") {
+                    NSWorkspace.shared.activateFileViewerSelecting([ItemStore.shared.databaseURL])
+                }
+                Button("Show backups folder") {
+                    let dir = ItemStore.shared.databaseURL
+                        .deletingLastPathComponent()
+                        .appendingPathComponent("Backups", isDirectory: true)
+                    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+                    NSWorkspace.shared.open(dir)
+                }
+                Button("Export everything…") { exportArchive() }
+                Button("Import from an export…") { importArchive() }
+                Text("Human RAM is fully offline. Back up or export before big changes; importing merges by item and keeps the newest edit.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
+            Section("Updates") {
+                Toggle("Check for updates automatically", isOn: $settings.checkForUpdates)
+                if let release = updates.available {
+                    Button("Version \(release.version) is available") {
+                        NSWorkspace.shared.open(release.url)
+                    }
+                    .foregroundStyle(.blue)
+                } else {
+                    Button(updates.isChecking ? "Checking…" : "Check for updates now") {
+                        updates.check()
+                    }
+                    .disabled(updates.isChecking)
+                }
+                Text("Uses one anonymous request to the public GitHub Releases page. No account, no tracking, no data leaves your Mac.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
             Section("About") {
+                LabeledContent("Version", value: appVersion)
                 LabeledContent("Developer", value: "Derek Han")
                 Text("Human RAM — your attention, treated like memory.")
                     .font(.caption).foregroundStyle(.secondary)
@@ -131,6 +198,40 @@ struct SettingsView: View {
             rcomps.hour = settings.noteReviewHour
             rcomps.minute = settings.noteReviewMinute
             reviewTime = Calendar.current.date(from: rcomps) ?? Date()
+            updates.checkIfEnabled()
+        }
+    }
+
+    private func exportArchive() {
+        let panel = NSSavePanel()
+        panel.title = "Export Human RAM data"
+        panel.nameFieldStringValue = "humanram-export.json"
+        panel.allowedContentTypes = [.json]
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            let data = try ItemStore.shared.exportArchiveData()
+            try data.write(to: url, options: .atomic)
+            dataMessage = "Exported \(ItemStore.shared.items.count) items to \(url.lastPathComponent)."
+        } catch {
+            dataMessage = "Export failed: \(error.localizedDescription)"
+        }
+    }
+
+    private func importArchive() {
+        let panel = NSOpenPanel()
+        panel.title = "Import Human RAM data"
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = [.json]
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            let data = try Data(contentsOf: url)
+            let count = try ItemStore.shared.importArchive(data)
+            dataMessage = count > 0
+                ? "Imported or updated \(count) items."
+                : "Nothing to import — your data was already up to date."
+        } catch {
+            dataMessage = "Import failed: \(error.localizedDescription)"
         }
     }
 }

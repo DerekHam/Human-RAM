@@ -8,25 +8,55 @@ final class Database {
     private var handle: OpaquePointer?
     let path: String
 
+    /// False when the file could not be opened (corrupt or unreadable). Every
+    /// method degrades to a no-op so the app can surface the problem instead of
+    /// crashing on launch.
+    var isOpen: Bool { handle != nil }
+
     init(path: String) {
         self.path = path
         if sqlite3_open(path, &handle) != SQLITE_OK {
-            let msg = String(cString: sqlite3_errmsg(handle))
-            fatalError("Unable to open database at \(path): \(msg)")
+            let msg = handle.map { String(cString: sqlite3_errmsg($0)) } ?? "unknown error"
+            NSLog("HumanRAM: unable to open database at \(path): \(msg)")
+            if let handle { sqlite3_close(handle) }
+            handle = nil
+            return
         }
         sqlite3_busy_timeout(handle, 3000)
         exec("PRAGMA journal_mode = WAL;")
         exec("PRAGMA foreign_keys = ON;")
     }
 
-    deinit {
+    func close() {
         if let handle { sqlite3_close(handle) }
+        handle = nil
+    }
+
+    deinit { close() }
+
+    /// Runs SQLite's built-in consistency check. Used before touching an
+    /// existing database so a corrupt file can be quarantined.
+    func quickCheck() -> Bool {
+        guard isOpen else { return false }
+        var ok = false
+        query("PRAGMA quick_check;") { row in
+            ok = (row.string(0) == "ok")
+        }
+        return ok
+    }
+
+    /// Flushes the WAL into the main database file so a plain file copy is a
+    /// complete snapshot.
+    func checkpoint() {
+        exec("PRAGMA wal_checkpoint(TRUNCATE);")
     }
 
     @discardableResult
     func exec(_ sql: String) -> Bool {
+        guard let handle else { return false }
         var err: UnsafeMutablePointer<CChar>?
-        if sqlite3_exec(handle, sql, nil, nil, &err) != SQLITE_OK {
+        let code = sqlite3_exec(handle, sql, nil, nil, &err)
+        if code != SQLITE_OK {
             if let err {
                 NSLog("HumanRAM SQL error: \(String(cString: err)) for: \(sql)")
                 sqlite3_free(err)
@@ -36,7 +66,16 @@ final class Database {
         return true
     }
 
+    /// Wraps `body` in a transaction so a multi-statement mutation is all-or-nothing.
+    func transaction(_ body: () -> Void) {
+        guard isOpen else { return }
+        exec("BEGIN IMMEDIATE;")
+        body()
+        exec("COMMIT;")
+    }
+
     func run(_ sql: String, _ binds: [Any?] = []) {
+        guard let handle else { return }
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(handle, sql, -1, &stmt, nil) == SQLITE_OK else {
             NSLog("HumanRAM prepare failed: \(lastError) for: \(sql)")
@@ -50,6 +89,7 @@ final class Database {
     }
 
     func query(_ sql: String, _ binds: [Any?] = [], _ row: (OpaquePointer) -> Void) {
+        guard let handle else { return }
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(handle, sql, -1, &stmt, nil) == SQLITE_OK else {
             NSLog("HumanRAM prepare failed: \(lastError) for: \(sql)")
@@ -63,7 +103,8 @@ final class Database {
     }
 
     private var lastError: String {
-        String(cString: sqlite3_errmsg(handle))
+        guard let handle else { return "database not open" }
+        return String(cString: sqlite3_errmsg(handle))
     }
 
     private func bind(_ stmt: OpaquePointer?, _ binds: [Any?]) {

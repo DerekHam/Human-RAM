@@ -3,6 +3,31 @@
 All notable changes to Human RAM are documented here. This project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.1] - 2026-09-29
+
+### Added
+
+- **Data safety.** Human RAM snapshots the database before every schema
+  migration, so an upgrade can always be rolled back by hand.
+- **Export and import.** Settings can export everything to a JSON archive and
+  merge one back; imports keep the newest edit per item and never clobber newer
+  local changes.
+- **Backups in Settings.** Back up the database with one click, or reveal the
+  database and backups folder in Finder.
+- **Damaged-database recovery.** An unreadable database is moved aside and the
+  app starts fresh instead of crashing on launch; Settings points to the file.
+- **Update check.** Human RAM checks the public GitHub Releases list (one
+  anonymous request, opt out in Settings) and shows a banner in the menu bar
+  when a newer version is available.
+- **Universal build.** Release builds now run on both Apple Silicon and Intel
+  Macs.
+- **Homebrew.** `brew install --cask human-ram` is the recommended install; the
+  cask clears the quarantine flag so there is no "unidentified developer"
+  warning.
+- **Release tooling.** `Scripts/release.sh` builds a universal app and produces
+  a DMG and zip with checksums; GitHub Actions runs tests on every push and can
+  publish a release from a tag.
+
 ## [0.2.0] - 2026-09-28
 
 ### Added

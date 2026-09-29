@@ -1,0 +1,44 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to build (e.g. v0.2.1)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run tests
+        run: swift test
+
+      - name: Build universal DMG + zip
+        env:
+          HRAM_UNIVERSAL: "1"
+        run: ./Scripts/release.sh release
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: |
+          VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Resources/Info.plist)"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" build/Human-RAM-v${VERSION}-macOS.dmg build/Human-RAM-v${VERSION}-macOS.zip build/checksums.txt --clobber
+          else
+            gh release create "$TAG" \
+              --title "Human RAM $TAG" \
+              --generate-notes \
+              build/Human-RAM-v${VERSION}-macOS.dmg \
+              build/Human-RAM-v${VERSION}-macOS.zip \
+              build/checksums.txt
+          fi

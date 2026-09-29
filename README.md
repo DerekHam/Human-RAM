@@ -1,12 +1,35 @@
 # Human RAM
 
+[![Latest release](https://img.shields.io/github/v/release/DerekHam/Human-RAM?label=download&color=blue)](https://github.com/DerekHam/Human-RAM/releases/latest)
+[![CI](https://github.com/DerekHam/Human-RAM/actions/workflows/ci.yml/badge.svg)](https://github.com/DerekHam/Human-RAM/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+![Platform: macOS 14+](https://img.shields.io/badge/platform-macOS%2014%2B-lightgrey)
+
 A macOS menu-bar app that treats your attention like computer memory.
 
 Most to-do apps ask you to organize. Human RAM asks almost nothing: you write a thought down in one keystroke, and the app decides when it should come back to you. It's built around a simple metaphor — your mind is **RAM**, and this app is a small external module for it.
 
 Built by Derek Han with help from several AI agents.
 
-> **Status: early preview.** Human RAM is still under active development. It's already good for everyday use for some people — writing things down, keeping a small working set, and filing notes — but expect rough edges, incomplete features, and the occasional breaking change between versions. Keep your own backups.
+> **Status: stable preview (0.2.x).** Human RAM is ready for everyday use — capture, the working set, decay, the daily scan, the nightly review, the diary and journal are all in. It stays a `0.x` while the schema and settings can still change between minor versions, so keep your own backups (Settings → **Your data** makes that one click). No account, no cloud, no telemetry.
+
+## Install
+
+**Homebrew (recommended — no security warning):**
+
+```bash
+brew tap DerekHam/human-ram
+brew install --cask human-ram
+```
+
+**Direct download:** grab the latest **DMG** from
+[Releases](https://github.com/DerekHam/Human-RAM/releases/latest), drag the app
+to Applications, then double-click **Fix Gatekeeper.command** in the DMG (or
+Control-click the app → **Open**). Human RAM is not notarized by Apple, so the
+first launch needs that one-time step.
+
+Then look for the **memory-chip icon in the menu bar** (no Dock icon), and
+accept the notifications prompt. Press `⌘⇧N` anywhere to capture a thought.
 
 - **Write** — a global hotkey opens a one-line capture box anywhere. Type, press Enter, done.
 - **Volatile store** — captured items live in a small, bounded "working set" (like registers).
@@ -55,6 +78,19 @@ Tasks and notes use separate capacities, separate intervals, and separate window
 
 ---
 
+## Screenshots
+
+| Capture from anywhere | The menu bar |
+|---|---|
+| ![Capture overlay](docs/images/capture.png) | ![Menu bar dropdown](docs/images/menu-bar.png) |
+
+| Daily Scan | Tonight's Notes |
+|---|---|
+| ![Daily scan](docs/images/daily-scan.png) | ![Tonight's notes review](docs/images/notes-review.png) |
+
+Regenerate these any time with `./Scripts/screenshots.sh` (renders the app's own
+windows to `docs/images/` — no Screen Recording permission needed).
+
 ## Requirements
 
 - macOS 14.0 (Sonoma) or later.
@@ -62,7 +98,7 @@ Tasks and notes use separate capacities, separate intervals, and separate window
 
 ---
 
-## Quick start
+## Build from source
 
 ```bash
 # Build the app bundle + widget extension (default: debug)
@@ -75,6 +111,19 @@ export HRAM_SIGN_ID="Apple Development: you@example.com (XXXXXXXXXX)"
 # Launch it
 open "build/Human RAM.app"
 ```
+
+### Cut a release
+
+```bash
+# Universal (arm64 + x86_64) shareable app -> build/Human-RAM-vX.Y.Z-macOS.dmg + .zip
+./Scripts/release.sh release
+
+# Publish the Homebrew tap from Casks/human-ram.rb
+./Scripts/setup_homebrew_tap.sh
+```
+
+Pushing a `v*` tag (or running the **Release** workflow manually) runs the tests
+and attaches the DMG, zip, and checksums to a GitHub Release.
 
 `build_app.sh` runs `swift build`, assembles `build/Human RAM.app` (`Contents/MacOS`, `Info.plist`, `AppIcon.icns`) plus the `HumanRAMWidget.appex` in `Contents/PlugIns`, then signs both with the Apple Development identity and the App Group entitlement.
 
@@ -204,6 +253,7 @@ Opens at the configured time when notes are pending. Reviews the inbox one note 
 | Notes: open review on launch | off | If on, the review opens at launch when its time already passed; off leaves it to its scheduled time, the notification, or the menu-bar **Review** button. |
 | Capture hotkey | `⌘⇧N` | Opens the capture box as a task; press `Tab` for a note. |
 | Launch at login | off | Register via `SMAppService`. |
+| Check for updates | on | One anonymous request to the public GitHub Releases list; shows a menu-bar banner when a newer stable version exists. |
 | Guide at startup | on in shareable build | Show the welcome guide on launch; reopen from **Settings → Guide**. |
 
 ---
@@ -213,6 +263,7 @@ Opens at the configured time when notes are pending. Reviews the inbox one note 
 - **Location:** `~/Library/Application Support/HumanRAM/humanram.sqlite3` (WAL mode). The shareable build writes to `~/Library/Application Support/HumanRAM Shared/` instead, so the two never share data.
 - **Engine:** system `libsqlite3`, accessed through a thin wrapper (`Store/Database.swift`). No ORM.
 - **Inspecting it:** `sqlite3 "~/Library/Application Support/HumanRAM/humanram.sqlite3"`.
+- **Safety:** the database is copied to `Backups/` before every schema migration. **Settings → Your data** can back up on demand, reveal the files in Finder, and export/import the whole store as JSON. If the database is ever unreadable it is moved aside (`*.corrupt-<time>`) and the app starts fresh instead of crashing.
 
 ### Schema
 
@@ -273,6 +324,7 @@ Sources/HumanRAMCore/         portable: shared by macOS now, iOS later
     AppVariant.swift          compile-time variant: storage folder + guide default
     Scheduler.swift           due reminders, decay, daily scan, nightly review
     AppNotifications.swift    shared Notification.Name values
+    UpdateChecker.swift       anonymous GitHub Releases update check
   UI/
     CaptureView.swift         capture overlay + CaptureModel + PriorityMenu
     DateTimeField.swift       MMDDHHMM numeric + calendar picker
@@ -294,6 +346,7 @@ Sources/HumanRAM/             macOS app shell
     GuideView.swift           welcome / how-to shown on launch in shareable build
   System/
     AppDelegate.swift         startup, router wiring, hotkey registration, debug hooks
+    SnapshotService.swift     HRAM_SNAPSHOT_DIR window-to-PNG screenshot pass
     HotKey.swift              Carbon global hotkeys (one instance per hotkey)
     CapturePanel.swift        floating NSPanel for capture
     WindowManager.swift       secondary windows with NSHostingView
@@ -306,6 +359,11 @@ Resources/
 Scripts/build_app.sh          build + assemble app + widget + codesign
 Scripts/build_app_adhoc.sh    backup build: app only, ad-hoc signed, no widget
 Scripts/build_share.sh        shareable variant: -DHRAM_SHAREABLE, own data + bundle id
+Scripts/release.sh            universal shareable app -> DMG + zip + checksums
+Scripts/setup_homebrew_tap.sh create/update the Homebrew tap from Casks/human-ram.rb
+Scripts/screenshots.sh        render docs/images/ via HRAM_SNAPSHOT_DIR
+Casks/human-ram.rb            Homebrew cask (preferred install)
+.github/workflows/            CI (test on push) + Release (publish DMG on tag)
 Tests/HumanRAMTests/          unit tests for store rules, decay, ordering, date parsing
 CHANGELOG.md                  release notes
 ```
@@ -332,6 +390,7 @@ CHANGELOG.md                  release notes
 | `HRAM_DEBUG_SEED=1` | Seeds sample tasks and notes **if the store is empty**. |
 | `HRAM_DEBUG_OPEN=1` | Opens every window (capture, scan, diary, review, journal, settings) so all views render. |
 | `HRAM_DB_PATH=/path/db.sqlite3` | Uses an isolated database instead of the real one. |
+| `HRAM_SNAPSHOT_DIR=/path` | Renders each window to a PNG there and quits (`Scripts/screenshots.sh`). |
 
 Example isolated smoke test:
 
@@ -362,7 +421,7 @@ Then update `reload()`, `insert()`, and `write()`, and add the column to the bas
 
 If you are an AI assistant working in this repo, keep these in mind:
 
-- **This is a personal, offline app.** Do not add networking, accounts, analytics, or third-party dependencies without an explicit request.
+- **This is a personal, offline app.** The only network call is the anonymous GitHub Releases update check (`Core/UpdateChecker.swift`); do not add accounts, analytics, tracking, or third-party dependencies without an explicit request.
 - **No comments in code** unless the user asks. Match the existing concise Swift style.
 - **Keep tasks and notes separated.** Use distinct `ItemState` cases for anything note-related; never route notes through task queries (`loaded`, `backlog`, `completed`, `enforceCapacity`, `applyDecay`, `badgeCount`).
 - **Respect the invariants** above: `ItemStore` owns state; UI never writes SQL directly.
@@ -382,7 +441,9 @@ If you are an AI assistant working in this repo, keep these in mind:
 
 - The **hotkey recorder** is not implemented; Settings only offers reset-to-default. `⌘⇧N` is the default.
 - The notes inbox soft-caps: it flags **FULL** past capacity and never auto-files, rather than refusing captures.
-- `build_app.sh` produces a Developer ID / Apple Development–signed bundle (needs `HRAM_SIGN_ID`); `build_app_adhoc.sh` and `build_share.sh` produce ad-hoc signed bundles (fine for personal use, not for distribution).
+- **Not notarized.** Releases are ad-hoc signed, not signed with a paid Apple Developer certificate, so macOS warns on first launch. The Homebrew cask and the DMG's **Fix Gatekeeper.command** both clear the quarantine flag; there is no way to remove the warning without a $99/yr Developer ID.
+- **No widget in the released build.** The shareable app ships without the widget extension, because App Groups require a real Team ID. The widget is available in the locally built full app (`build_app.sh`).
+- `build_app.sh` produces a Developer ID / Apple Development–signed bundle (needs `HRAM_SIGN_ID`); `build_app_adhoc.sh`, `build_share.sh`, and `release.sh` produce ad-hoc signed bundles.
 - The daily scan opens at its trigger time (or on launch, if its time already passed and it hasn't run that day). The nightly review opens at the trigger time while the app is running, from the notification, or from the menu-bar **Review** button; it only opens at launch when **Open review on launch** is enabled.
 
 ---

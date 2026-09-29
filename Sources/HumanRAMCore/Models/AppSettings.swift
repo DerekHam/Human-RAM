@@ -24,6 +24,8 @@ public final class AppSettings: ObservableObject {
     @Published public var year: Int { didSet { defaults.set(year, forKey: "year") } }
     @Published public var launchAtLogin: Bool { didSet { defaults.set(launchAtLogin, forKey: "launchAtLogin") } }
     @Published public var showGuideOnLaunch: Bool { didSet { defaults.set(showGuideOnLaunch, forKey: "showGuideOnLaunch") } }
+    /// Anonymous check of the public GitHub Releases list for a newer version.
+    @Published public var checkForUpdates: Bool { didSet { defaults.set(checkForUpdates, forKey: "checkForUpdates") } }
 
     // Notes
     @Published public var noteCapacity: Int { didSet { defaults.set(noteCapacity, forKey: "noteCapacity") } }
@@ -48,6 +50,7 @@ public final class AppSettings: ObservableObject {
             "year": Calendar.current.component(.year, from: Date()),
             "launchAtLogin": false,
             "showGuideOnLaunch": AppVariant.showsGuideByDefault,
+            "checkForUpdates": true,
             "noteCapacity": 15,
             "noteReviewEnabled": true,
             "noteReviewOnLaunch": false,
@@ -76,6 +79,7 @@ public final class AppSettings: ObservableObject {
         }
         launchAtLogin = defaults.bool(forKey: "launchAtLogin")
         showGuideOnLaunch = defaults.bool(forKey: "showGuideOnLaunch")
+        checkForUpdates = defaults.bool(forKey: "checkForUpdates")
         noteCapacity = defaults.integer(forKey: "noteCapacity")
         noteReviewEnabled = defaults.bool(forKey: "noteReviewEnabled")
         noteReviewOnLaunch = defaults.bool(forKey: "noteReviewOnLaunch")

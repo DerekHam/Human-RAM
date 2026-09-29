@@ -5,6 +5,7 @@ import HumanRAMCore
 struct MenuBarView: View {
     @EnvironmentObject private var store: ItemStore
     @ObservedObject private var settings = AppSettings.shared
+    @ObservedObject private var updates = UpdateChecker.shared
 
     private enum QuickField: Hashable { case text, start, due }
 
@@ -23,6 +24,9 @@ struct MenuBarView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             header
+            if let release = updates.available {
+                updateBanner(release)
+            }
             quickCapture
             Text(hint)
                 .font(.caption2)
@@ -92,6 +96,28 @@ struct MenuBarView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
+    }
+
+    private func updateBanner(_ release: ReleaseInfo) -> some View {
+        Button {
+            NSWorkspace.shared.open(release.url)
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.down.circle.fill")
+                    .foregroundStyle(.blue)
+                Text("Human RAM \(release.version) is available")
+                    .font(.caption).fontWeight(.medium)
+                Spacer(minLength: 0)
+                Image(systemName: "arrow.up.right")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(.blue.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
+        }
+        .buttonStyle(.plain)
+        .help("Open the release page to download the update")
     }
 
     private var quickCapture: some View {
