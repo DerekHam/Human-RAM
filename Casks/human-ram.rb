@@ -1,5 +1,5 @@
 cask "human-ram" do
-  version "0.2.1"
+  version "0.2.2"
   # Human RAM is ad-hoc signed (no paid Apple Developer certificate), and each
   # release is built fresh, so a pinned checksum would break installs whenever
   # someone rebuilds. Content is delivered over HTTPS from the project's own

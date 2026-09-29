@@ -3,13 +3,14 @@
 All notable changes to Human RAM are documented here. This project uses
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.2.2] - 2026-09-29
 
 ### Added
 
 - **Theme setting.** Appearance can follow macOS or be forced to **Light** or
   **Dark** for Human RAM only (Settings → Appearance). The app already followed
   the system; this adds an explicit override.
+- Opaque, light/dark screenshots in the README.
 
 ## [0.2.1] - 2026-09-29
 
