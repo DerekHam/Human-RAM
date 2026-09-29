@@ -2,6 +2,7 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 import ServiceManagement
+import UserNotifications
 import HumanRAMCore
 
 struct SettingsView: View {
@@ -10,6 +11,7 @@ struct SettingsView: View {
     @State private var scanTime = Date()
     @State private var reviewTime = Date()
     @State private var dataMessage: String?
+    @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
 
     private var appVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—"
@@ -106,6 +108,24 @@ struct SettingsView: View {
                         NotificationCenter.default.post(name: .humanRAMScheduleChanged, object: nil)
                     }
                 Text("Captured thoughts wait in the inbox and are filed into the journal during review.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
+            Section("Notifications") {
+                LabeledContent("Status", value: notificationStatusLabel)
+                    .foregroundStyle(notificationStatus == .authorized ? .primary : .secondary)
+                switch notificationStatus {
+                case .denied:
+                    Button("Open Notification Settings…") { openNotificationSettings() }
+                case .notDetermined:
+                    Button("Enable notifications") {
+                        Notifications.shared.requestAuthorization { _ in refreshNotificationStatus() }
+                    }
+                default:
+                    EmptyView()
+                }
+                Button("Send a test notification") { Notifications.shared.sendTestNotification() }
+                Text("Human RAM uses native notifications for due tasks, the Daily Scan, and the nightly review. If none appear, allow Human RAM in System Settings → Notifications, and check that Focus/Do Not Disturb is off.")
                     .font(.caption).foregroundStyle(.secondary)
             }
 
@@ -208,6 +228,28 @@ struct SettingsView: View {
             rcomps.minute = settings.noteReviewMinute
             reviewTime = Calendar.current.date(from: rcomps) ?? Date()
             updates.checkIfEnabled()
+            refreshNotificationStatus()
+        }
+    }
+
+    private var notificationStatusLabel: String {
+        switch notificationStatus {
+        case .authorized: return "Allowed"
+        case .denied: return "Denied"
+        case .provisional: return "Quiet"
+        case .ephemeral: return "Temporary"
+        case .notDetermined: return "Not asked yet"
+        @unknown default: return "Unknown"
+        }
+    }
+
+    private func refreshNotificationStatus() {
+        Notifications.shared.authorizationStatus { notificationStatus = $0 }
+    }
+
+    private func openNotificationSettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension") {
+            NSWorkspace.shared.open(url)
         }
     }
 

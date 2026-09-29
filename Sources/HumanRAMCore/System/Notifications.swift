@@ -2,17 +2,41 @@ import Foundation
 import UserNotifications
 
 /// Wraps local notifications for due items and the daily digest.
-final class Notifications: NSObject, UNUserNotificationCenterDelegate {
-    static let shared = Notifications()
+public final class Notifications: NSObject, UNUserNotificationCenterDelegate {
+    public static let shared = Notifications()
 
     private let center = UNUserNotificationCenter.current()
 
     func configure() {
         center.delegate = self
+        requestAuthorization()
+    }
+
+    /// Asks for permission (no-op if the user already decided). macOS only shows
+    /// the prompt while the app is launched normally, not from a bare binary.
+    public func requestAuthorization(_ completion: ((Bool) -> Void)? = nil) {
         center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
             if let error { NSLog("HumanRAM notification auth error: \(error.localizedDescription)") }
-            _ = granted
+            DispatchQueue.main.async { completion?(granted) }
         }
+    }
+
+    /// Current permission, delivered on the main thread.
+    public func authorizationStatus(_ completion: @escaping (UNAuthorizationStatus) -> Void) {
+        center.getNotificationSettings { settings in
+            DispatchQueue.main.async { completion(settings.authorizationStatus) }
+        }
+    }
+
+    /// Fires a local notification a few seconds out, so the user can confirm
+    /// permission and Do Not Disturb are actually set up.
+    public func sendTestNotification() {
+        let content = UNMutableNotificationContent()
+        content.title = "Human RAM"
+        content.body = "Notifications are working."
+        content.sound = .default
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 5, repeats: false)
+        center.add(UNNotificationRequest(identifier: "test-\(UUID().uuidString)", content: content, trigger: trigger))
     }
 
     /// Re-sync scheduled reminders so they mirror the current due items.
@@ -70,7 +94,7 @@ final class Notifications: NSObject, UNUserNotificationCenterDelegate {
 
     // MARK: - UNUserNotificationCenterDelegate
 
-    func userNotificationCenter(
+    public func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
@@ -78,7 +102,7 @@ final class Notifications: NSObject, UNUserNotificationCenterDelegate {
         completionHandler([.banner, .sound])
     }
 
-    func userNotificationCenter(
+    public func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
