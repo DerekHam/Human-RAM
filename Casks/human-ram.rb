@@ -7,13 +7,17 @@ cask "human-ram" do
   # "Scripts/release.sh".
   sha256 :no_check
 
-  url "https://github.com/DerekHam/Human-RAM/releases/download/v#{version}/Human-RAM-v#{version}-macOS.dmg",
-      verified: "github.com/DerekHam/Human-RAM/"
+  url "https://github.com/DerekHam/Human-RAM/releases/download/v#{version}/Human-RAM-v#{version}-macOS.dmg"
   name "Human RAM"
   desc "Menu-bar app that treats your attention like computer memory"
   homepage "https://github.com/DerekHam/Human-RAM"
 
   app "Human RAM (Shareable).app"
+
+  postflight_steps do
+    run "/usr/bin/xattr",
+        args: ["-dr", "com.apple.quarantine", "{{appdir}}/Human RAM (Shareable).app"]
+  end
 
   caveats <<~EOS
     Human RAM is not notarized by Apple. Homebrew clears the download
@@ -21,10 +25,4 @@ cask "human-ram" do
     warning. If you ever move the app by hand, run:
       xattr -dr com.apple.quarantine "/Applications/Human RAM (Shareable).app"
   EOS
-
-  postflight do
-    system_command "/usr/bin/xattr",
-                   args: ["-dr", "com.apple.quarantine", "#{appdir}/Human RAM (Shareable).app"],
-                   sudo:  false
-  end
 end
