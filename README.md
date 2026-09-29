@@ -85,16 +85,34 @@ Tasks and notes use separate capacities, separate intervals, and separate window
 
 ## Screenshots
 
-| Capture from anywhere | The menu bar |
-|---|---|
-| ![Capture overlay](docs/images/capture.png) | ![Menu bar dropdown](docs/images/menu-bar.png) |
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/capture-dark.png">
+  <img alt="Capture overlay" src="docs/images/capture-light.png" width="520">
+</picture>
 
-| Daily Scan | Tonight's Notes |
-|---|---|
-| ![Daily scan](docs/images/daily-scan.png) | ![Tonight's notes review](docs/images/notes-review.png) |
+**Capture from anywhere** — press `⌘⇧N`; press `Tab` for a note.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/menu-bar-dark.png">
+  <img alt="Menu bar dropdown" src="docs/images/menu-bar-light.png" width="440">
+</picture>
+
+**The menu bar** — the working set, the hard-drive backlog, and notes at a glance.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/daily-scan-dark.png">
+  <img alt="Daily scan" src="docs/images/daily-scan-light.png" width="620">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/notes-review-dark.png">
+  <img alt="Tonight's notes review" src="docs/images/notes-review-light.png" width="560">
+</picture>
+
+**Daily Scan** (tasks) and **Tonight's Notes** (notes review).
 
 Regenerate these any time with `./Scripts/screenshots.sh` (renders the app's own
-windows to `docs/images/` — no Screen Recording permission needed).
+windows in light and dark — no Screen Recording permission needed).
 
 ## Requirements
 
@@ -366,7 +384,7 @@ Scripts/build_app_adhoc.sh    backup build: app only, ad-hoc signed, no widget
 Scripts/build_share.sh        shareable variant: -DHRAM_SHAREABLE, own data + bundle id
 Scripts/release.sh            universal shareable app -> DMG + zip + checksums
 Scripts/setup_homebrew_tap.sh create/update the Homebrew tap from Casks/human-ram.rb
-Scripts/screenshots.sh        render docs/images/ via HRAM_SNAPSHOT_DIR
+Scripts/screenshots.sh        render docs/images/ light+dark via HRAM_SNAPSHOT_DIR
 Casks/human-ram.rb            Homebrew cask (preferred install)
 .github/workflows/            CI (test on push) + Release (publish DMG on tag)
 Tests/HumanRAMTests/          unit tests for store rules, decay, ordering, date parsing
@@ -395,7 +413,7 @@ CHANGELOG.md                  release notes
 | `HRAM_DEBUG_SEED=1` | Seeds sample tasks and notes **if the store is empty**. |
 | `HRAM_DEBUG_OPEN=1` | Opens every window (capture, scan, diary, review, journal, settings) so all views render. |
 | `HRAM_DB_PATH=/path/db.sqlite3` | Uses an isolated database instead of the real one. |
-| `HRAM_SNAPSHOT_DIR=/path` | Renders each window to a PNG there and quits (`Scripts/screenshots.sh`). |
+| `HRAM_SNAPSHOT_DIR=/path` | Renders each window to an opaque PNG there and quits. Optional `HRAM_SNAPSHOT_APPEARANCE=light\|dark` and `HRAM_SNAPSHOT_SUFFIX=-dark` (`Scripts/screenshots.sh`). |
 
 Example isolated smoke test:
 
