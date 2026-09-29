@@ -51,11 +51,22 @@ cp "$ROOT/Resources/INSTALL.txt" "$STAGE/READ ME FIRST.txt"
 cp "$ROOT/Resources/Fix Gatekeeper.command" "$STAGE/Fix Gatekeeper.command"
 chmod +x "$STAGE/Fix Gatekeeper.command"
 
-hdiutil create \
-    -volname "Human RAM" \
-    -srcfolder "$STAGE" \
-    -ov -format UDZO \
-    "$DMG" >/dev/null
+# Build the DMG in a temp dir; CI runners sometimes report "Resource busy"
+# when creating it inside the working tree, so retry after detaching.
+hdiutil detach "/Volumes/Human RAM" -force >/dev/null 2>&1 || true
+TMP_DMG="$(mktemp -d)/Human-RAM.dmg"
+attempt=1
+until hdiutil create -volname "Human RAM" -srcfolder "$STAGE" -ov -format UDZO "$TMP_DMG" >/dev/null; do
+    if [ "$attempt" -ge 4 ]; then
+        echo "error: hdiutil create failed after $attempt attempts" >&2
+        exit 1
+    fi
+    attempt=$((attempt + 1))
+    echo "    hdiutil failed; detaching and retrying ($attempt)…"
+    hdiutil detach "/Volumes/Human RAM" -force >/dev/null 2>&1 || true
+    sleep 3
+done
+mv "$TMP_DMG" "$DMG"
 
 echo "==> zipping app"
 ditto -c -k --sequesterRsrc --keepParent "$APP_DIR" "$ZIP"
