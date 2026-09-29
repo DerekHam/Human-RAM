@@ -19,8 +19,13 @@ Built by Derek Han with help from several AI agents.
 
 ```bash
 brew tap DerekHam/human-ram
+brew trust DerekHam/human-ram   # one-time: trust this third-party tap
 brew install --cask human-ram
 ```
+
+Homebrew requires an explicit `brew trust` the first time you install a cask
+from a third-party tap (it shows the cask's contents and asks before anything
+runs). It only needs to be done once.
 
 **Direct download:** grab the latest **DMG** from
 [Releases](https://github.com/DerekHam/Human-RAM/releases/latest), drag the app

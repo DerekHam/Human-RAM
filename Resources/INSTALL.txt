@@ -19,7 +19,10 @@ COMMAND-LINE WAY
 HOMEBREW (no warning at all)
 
     brew tap DerekHam/human-ram
+    brew trust DerekHam/human-ram
     brew install --cask human-ram
+
+    (Homebrew asks you to trust a third-party tap once.)
 
 FIRST RUN
 
