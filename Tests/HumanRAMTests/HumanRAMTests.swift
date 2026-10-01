@@ -109,6 +109,42 @@ final class HumanRAMTests: XCTestCase {
         XCTAssertEqual(ordered.last?.id, high.id)
     }
 
+    func testRamOrderSortsByDayThenPriorityIgnoringTime() {
+        clearAll()
+        let cal = Calendar.current
+        let now = Date()
+        let todayMorning = cal.date(bySettingHour: 8, minute: 0, second: 0, of: now)!
+        let todayEvening = cal.date(bySettingHour: 20, minute: 0, second: 0, of: now)!
+        let tomorrow = cal.date(byAdding: .day, value: 1, to: now)!
+
+        // A later day wins on date even when its priority is highest...
+        let tomorrowHigh = store.add(text: "tomorrow high", dueAt: tomorrow, priority: 3)
+        // ...while same-day tasks are ordered by priority, not by time of day.
+        let todayEveningLow = store.add(text: "today evening low", dueAt: todayEvening, priority: 1)
+        let todayMorningHigh = store.add(text: "today morning high", dueAt: todayMorning, priority: 3)
+
+        let order = store.loaded.map(\.id)
+        XCTAssertEqual(
+            order,
+            [todayMorningHigh.id, todayEveningLow.id, tomorrowHigh.id],
+            "day first, then priority; the hour of day is ignored"
+        )
+    }
+
+    func testRamOrderUsesStartDayWhenThereIsNoDueDate() {
+        clearAll()
+        let cal = Calendar.current
+        let now = Date()
+        let today = cal.date(bySettingHour: 18, minute: 0, second: 0, of: now)!
+        let tomorrow = cal.date(byAdding: .day, value: 1, to: now)!
+
+        let farStart = store.add(text: "start tomorrow", startAt: tomorrow, priority: 3)
+        let soonStart = store.add(text: "start today", startAt: today, priority: 1)
+
+        let order = store.loaded.map(\.id)
+        XCTAssertEqual(order, [soonStart.id, farStart.id], "a start-only task is arranged by its start day")
+    }
+
     // MARK: - Time window
 
     func testTimeWindowSpillsFarAndLoadsNear() {
@@ -137,6 +173,47 @@ final class HumanRAMTests: XCTestCase {
         let task = store.add(text: "no schedule")
         store.applyTimeWindow()
         XCTAssertEqual(store.item(id: task.id)?.state, .loaded, "undated tasks remain in RAM")
+    }
+
+    func testStartlessTaskLoadsByPriorityLead() {
+        clearAll()
+        let originalEnabled = AppSettings.shared.autoArrangeEnabled
+        let originalWindow = AppSettings.shared.ramWindowHours
+        let originalLimit = AppSettings.shared.workingSetLimit
+        AppSettings.shared.autoArrangeEnabled = true
+        // A deliberately small window proves start-less tasks ignore it.
+        AppSettings.shared.ramWindowHours = 1
+        AppSettings.shared.workingSetLimit = 20
+        defer {
+            AppSettings.shared.autoArrangeEnabled = originalEnabled
+            AppSettings.shared.ramWindowHours = originalWindow
+            AppSettings.shared.workingSetLimit = originalLimit
+        }
+
+        let cal = Calendar.current
+        let base = cal.startOfDay(for: Date())
+        func due(_ days: Int) -> Date { cal.date(byAdding: .day, value: days, to: base)! }
+
+        // High: 3 days ahead. Normal: 2. Low: 1. None: the due day itself.
+        let high3 = store.add(text: "high in 3", dueAt: due(3), priority: 3)
+        let high4 = store.add(text: "high in 4", dueAt: due(4), priority: 3)
+        let normal2 = store.add(text: "normal in 2", dueAt: due(2), priority: 2)
+        let normal3 = store.add(text: "normal in 3", dueAt: due(3), priority: 2)
+        let low1 = store.add(text: "low in 1", dueAt: due(1), priority: 1)
+        let low2 = store.add(text: "low in 2", dueAt: due(2), priority: 1)
+        let none0 = store.add(text: "none today", dueAt: due(0), priority: 0)
+        let none1 = store.add(text: "none tomorrow", dueAt: due(1), priority: 0)
+
+        store.applyTimeWindow(now: base)
+
+        XCTAssertEqual(store.item(id: high3.id)?.state, .loaded, "high loads 3 days out")
+        XCTAssertEqual(store.item(id: high4.id)?.state, .backlog, "high waits beyond 3 days")
+        XCTAssertEqual(store.item(id: normal2.id)?.state, .loaded, "normal loads 2 days out")
+        XCTAssertEqual(store.item(id: normal3.id)?.state, .backlog, "normal waits beyond 2 days")
+        XCTAssertEqual(store.item(id: low1.id)?.state, .loaded, "low loads 1 day out")
+        XCTAssertEqual(store.item(id: low2.id)?.state, .backlog, "low waits beyond 1 day")
+        XCTAssertEqual(store.item(id: none0.id)?.state, .loaded, "no priority loads on the due day")
+        XCTAssertEqual(store.item(id: none1.id)?.state, .backlog, "no priority waits until the due day")
     }
 
     func testPinnedFarTaskIsNotSpilled() {

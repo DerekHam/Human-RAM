@@ -72,7 +72,7 @@ Tasks and notes use separate capacities, separate intervals, and separate window
 - A Task/Note toggle in the capture overlay; press **Tab** to switch. Staged **Enter** walks the RAM composer: content → start date → due date → complete.
 - Priority by hotkey (**⌘1**–**⌘4**) in the overlay and the item editor.
 - Numeric date entry: type `MMDDHHMM` (24 h), e.g. `09231920` → Sep 23, 19:20. Separators are optional. A calendar popover is available too. Tasks can carry both a **start** and a **due** date.
-- **Auto-arrange:** tasks whose start (or due) is beyond a configurable window (default **48 h**) spill to the hard drive, and tasks entering the window load back into RAM. RAM stays what's relevant now.
+- **Auto-arrange:** a task with a start date whose start is beyond a configurable window (default **48 h**) spills to the hard drive and loads back as it enters. A task without a start date uses a priority lead before its due date instead — **3 days** (high), **2** (normal), **1** (low), or the due day itself (none). RAM stays what's relevant now.
 - Bounded working set with automatic spill to a backlog ("hard drive").
 - Decay: untouched loaded items dim, then spill automatically. Pinned items are exempt.
 - Native notifications for due items, with a live menu-bar badge.
@@ -230,7 +230,7 @@ Typing a date is optional. Use the calendar button for point-and-click. The **ye
 
 ### The menu bar
 
-- The icon shows the task count (or due count), and a red dot when the notes inbox is full.
+- The icon shows the loaded task count, a red dot when a task is due, and an orange dot when the notes inbox is full.
 - The dropdown is wide and compact: every **loaded** task is always visible with no inner scroll, while the hard-drive backlog and pending notes share a short scroll area beneath it. Pending notes render as a one-line, two-column list.
 - The quick composer at the top writes a **Task** or **Note** (segmented toggle) straight from the dropdown, with optional start/due dates and priority for tasks, and a button to pop out the full capture overlay.
 - Press **Tab** in the composer to switch between Task and Note. (The menu-bar window is non-activating, so the app briefly activates while it is open; that is what lets the keyboard shortcuts reach it.)
@@ -253,7 +253,7 @@ Typing a date is optional. Use the calendar button for point-and-click. The **ye
 
 A **Human RAM** widget shows the tasks currently loaded in RAM, with due-date chips, in the macOS widget gallery and on the desktop / Notification Center. It comes in small, medium, and large.
 
-- It reflects the working set only (kind `task`, state `loaded`), ordered like RAM (pinned, then priority, then due date).
+- It reflects the working set only (kind `task`, state `loaded`), ordered like RAM (pinned, then the calendar day — time of day ignored — and priority within that day).
 - The app writes a small JSON snapshot (`ram-tasks.json`) to the App Group container and asks `WidgetCenter` to reload whenever items change.
 - Add it from **Edit Widgets** on the desktop or in Notification Center. If it doesn't appear, launch the app once (or copy it to `/Applications`) so LaunchServices registers the extension, then restart the widget daemons: `killall chronod NotificationCenter`.
 
@@ -277,7 +277,7 @@ Opens at the configured time when notes are pending. Reviews the inbox one note 
 |---|---|---|
 | RAM capacity | 7 | Max loaded tasks before spill. |
 | Auto-arrange | on | Spill/load tasks around the time window automatically. |
-| Window | 48 hours | Tasks starting further out spill; tasks entering the window load. |
+| Window | 48 hours | Start-date tasks further out spill; those entering the window load. Start-less tasks use their priority lead (3/2/1 days, or the due day). |
 | Dim after | 3 days | When a loaded task starts fading. |
 | Spill after | 10 days | When an untouched loaded task moves to backlog. |
 | Digest at | 19:20 | Daily Scan time. |

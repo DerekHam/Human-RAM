@@ -66,7 +66,7 @@ struct SettingsView: View {
                 .onChange(of: settings.ramWindowHours) { _, _ in
                     ItemStore.shared.applyTimeWindow()
                 }
-                Text("Tasks whose start (or due) is further out than the window spill to the hard drive; tasks entering the window load into RAM automatically.")
+                Text("A task with a start date spills while it is further out than the window, then loads back as it enters. A task without a start date waits for its priority instead: 3 days before the due date for high, 2 for normal, 1 for low, and the due day for no priority.")
                     .font(.caption).foregroundStyle(.secondary)
             }
 

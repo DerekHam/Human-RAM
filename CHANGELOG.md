@@ -3,6 +3,25 @@
 All notable changes to Human RAM are documented here. This project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- **RAM is arranged by date, then priority.** Tasks are grouped by their
+  calendar day (start, else due; time of day ignored) and, within a day, the
+  higher priority wins. Undated tasks follow dated ones; pinned tasks stay on
+  top.
+- **Start-less tasks enter RAM by priority.** A task without a start date now
+  loads ahead of its due date by priority — **3 days** for high, **2** for
+  normal, **1** for low, and on the due day for no priority. The auto-arrange
+  window still governs tasks that carry an explicit start date.
+
+### Fixed
+
+- **Menu-bar count updates.** The menu-bar item now observes the store directly,
+  so its count refreshes. It shows the loaded task count, a red dot when a task
+  is due, and an orange dot when the notes inbox is full.
+
 ## [0.3.1] - 2026-10-01
 
 ### Fixed

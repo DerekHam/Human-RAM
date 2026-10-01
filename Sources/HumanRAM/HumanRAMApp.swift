@@ -12,25 +12,33 @@ struct HumanRAMApp: App {
             MenuBarView()
                 .environmentObject(store)
         } label: {
-            MenuBarLabel(count: store.badgeCount, notesFull: store.isInboxFull)
+            MenuBarLabel(store: store)
         }
         .menuBarExtraStyle(.window)
     }
 }
 
 struct MenuBarLabel: View {
-    let count: Int
-    let notesFull: Bool
+    /// The label hosts its own status-item view, so it must observe the store
+    /// itself. Passing a precomputed value from the App body leaves the number
+    /// stale when items change.
+    @ObservedObject var store: ItemStore
 
     var body: some View {
+        let loaded = store.loaded.count
         HStack(spacing: 3) {
-            Image(systemName: count > 0 ? "memorychip.fill" : "memorychip")
-            if count > 0 {
-                Text("\(count)")
+            Image(systemName: loaded > 0 ? "memorychip.fill" : "memorychip")
+            if loaded > 0 {
+                Text("\(loaded)")
             }
-            if notesFull {
+            if !store.dueNow.isEmpty {
                 Circle()
                     .fill(.red)
+                    .frame(width: 5, height: 5)
+            }
+            if store.isInboxFull {
+                Circle()
+                    .fill(.orange)
                     .frame(width: 5, height: 5)
             }
         }

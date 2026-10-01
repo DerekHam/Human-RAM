@@ -89,8 +89,42 @@ public struct Item: Identifiable, Equatable, Codable {
 
     public var isNote: Bool { kind == .note }
 
-    /// The moment a task becomes relevant to RAM: its start, else its due date.
-    public var activationAt: Date? { startAt ?? dueAt }
+    /// The moment a task becomes relevant to RAM. An explicit start date wins;
+    /// otherwise the due date is pulled back by the priority lead, at day
+    /// granularity so the hour of day does not matter.
+    public var activationAt: Date? {
+        if let startAt { return startAt }
+        guard let dueAt else { return nil }
+        let cal = Calendar.current
+        let due = cal.startOfDay(for: dueAt)
+        guard priorityLeadDays > 0 else { return due }
+        return cal.date(byAdding: .day, value: -priorityLeadDays, to: due) ?? due
+    }
+
+    /// How many days before its due date a start-less task enters RAM, driven by
+    /// priority: high 3, normal 2, low 1, none 0 (the due day itself).
+    public var priorityLeadDays: Int {
+        switch priority {
+        case 3: return 3
+        case 2: return 2
+        case 1: return 1
+        default: return 0
+        }
+    }
+
+    /// True when the task carries an explicit start date, so the auto-arrange
+    /// window — not the priority lead — governs when it enters RAM.
+    public var usesStartWindow: Bool { startAt != nil }
+
+    /// The task's own scheduled date, used to order the RAM list.
+    public var scheduleAt: Date? { startAt ?? dueAt }
+
+    /// The calendar day a task is arranged by in RAM: the day of its scheduled
+    /// date, with the time of day discarded so same-day tasks tie on date.
+    public func arrangeDay(calendar: Calendar = .current) -> Date? {
+        guard let scheduleAt else { return nil }
+        return calendar.startOfDay(for: scheduleAt)
+    }
 
     /// True when the task has a start time still in the future.
     public var hasUpcomingStart: Bool {

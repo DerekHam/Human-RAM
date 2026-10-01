@@ -334,16 +334,19 @@ public final class ItemStore: ObservableObject {
         return due > 0 ? due : items.filter { !$0.deleted && $0.kind == .task && $0.state == .loaded }.count
     }
 
-    /// Priority desc, then due date, then oldest first. Pinned float to the top.
+    /// Pinned items float to the top. The rest are grouped by the calendar day
+    /// they become relevant (start, else due; time of day ignored) and, within a
+    /// day, the higher priority wins. Undated tasks follow dated ones, and ties
+    /// fall back to creation order.
     public static func ramOrder(_ a: Item, _ b: Item) -> Bool {
         if a.pinned != b.pinned { return a.pinned }
-        if a.priority != b.priority { return a.priority > b.priority }
-        switch (a.dueAt, b.dueAt) {
+        switch (a.arrangeDay(), b.arrangeDay()) {
         case let (l?, r?) where l != r: return l < r
         case (.some, .none): return true
         case (.none, .some): return false
         default: break
         }
+        if a.priority != b.priority { return a.priority > b.priority }
         return a.createdAt < b.createdAt
     }
 
@@ -521,8 +524,9 @@ public final class ItemStore: ObservableObject {
         }
     }
 
-    /// Promote backlog items into RAM until the limit is reached. Dated items
-    /// must be inside the auto-arrange window. Undated items are eligible only
+    /// Promote backlog items into RAM until the limit is reached. A task with a
+    /// start date must be inside the auto-arrange window; a start-less task waits
+    /// for its priority lead before the due date. Undated items are eligible only
     /// when `includeUndated`: the continuous auto-arrange passes `false` so it
     /// doesn't resurrect something the user just spilled, while completing a
     /// task uses the default to keep RAM full. Stale items stay on the disk.
@@ -535,20 +539,24 @@ public final class ItemStore: ObservableObject {
             guard let activation = item.activationAt else {
                 return includeUndated && item.touchedAt >= staleBefore
             }
-            return activation <= cutoff
+            let horizon = item.usesStartWindow ? cutoff : now
+            return activation <= horizon
         }.prefix(limit - loaded.count)
         for c in candidates { loadToRAM(id: c.id) }
     }
 
     /// Auto-arrange the working set around the configured time window:
     /// spill loaded tasks that start too far out, then load backlog tasks
-    /// that are now within the window.
+    /// that are now within the window. Start-less tasks use their priority
+    /// lead (3/2/1 days before the due date, or the due day for no priority)
+    /// instead of the window.
     public func applyTimeWindow(now: Date = Date()) {
         guard AppSettings.shared.autoArrangeEnabled else { return }
         let cutoff = Self.windowCutoff(now: now)
         for item in loaded where !item.pinned {
             guard let activation = item.activationAt else { continue }
-            if activation > cutoff { spillToDisk(id: item.id) }
+            let horizon = item.usesStartWindow ? cutoff : now
+            if activation > horizon { spillToDisk(id: item.id) }
         }
         fillWorkingSet(now: now, includeUndated: false)
     }
