@@ -3,6 +3,16 @@
 All notable changes to Human RAM are documented here. This project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- **Near-date entry no longer jumps to next year.** A typed `MMDD` is treated as
+  next year's occurrence only when it is more than three days before today, so
+  dates around today land in the current year.
+- The entry year no longer drifts after a rolled-forward date, so a later entry
+  in the same session is not silently shifted into next year.
+
 ## [0.3.0] - 2026-09-29
 
 ### Added

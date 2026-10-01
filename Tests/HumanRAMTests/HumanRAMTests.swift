@@ -467,6 +467,32 @@ final class HumanRAMTests: XCTestCase {
         XCTAssertEqual(kept?.year, 2026)
     }
 
+    func testNumericDateParserKeepsDatesWithinGraceWindow() {
+        let cal = utcCalendar
+        let now = cal.date(from: DateComponents(year: 2026, month: 9, day: 26, hour: 12))!
+
+        // A near-past date still belongs to this year.
+        let twoDaysAgo = NumericDateParser.parse("0924")
+        XCTAssertEqual(
+            NumericDateParser.date(from: twoDaysAgo, year: 2026, now: now, calendar: cal)?.year,
+            2026, "a date two days back is this year"
+        )
+
+        // Exactly three days before today is the boundary and is still kept.
+        let threeDaysAgo = NumericDateParser.parse("0923")
+        XCTAssertEqual(
+            NumericDateParser.date(from: threeDaysAgo, year: 2026, now: now, calendar: cal)?.year,
+            2026, "three days back is the edge of the grace window"
+        )
+
+        // More than three days before today rolls forward to next year.
+        let fourDaysAgo = NumericDateParser.parse("0922")
+        XCTAssertEqual(
+            NumericDateParser.date(from: fourDaysAgo, year: 2026, now: now, calendar: cal)?.year,
+            2027, "more than three days back means next year"
+        )
+    }
+
     func testNumericDateParserCanSkipRollForward() {
         let cal = utcCalendar
         let now = cal.date(from: DateComponents(year: 2026, month: 9, day: 26, hour: 12))!

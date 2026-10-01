@@ -176,11 +176,10 @@ public struct DateTimeField<F: Hashable>: View {
     }
 
     private func apply(_ result: (date: Date, year: Int)) {
+        // Only the bound date changes here. The entry year stays anchored to the
+        // current year (or an explicit picker choice) so one rolled-forward date
+        // cannot silently shift every later entry into next year.
         date = result.date
-        if year != result.year {
-            year = result.year
-            AppSettings.shared.year = result.year
-        }
     }
 
     private func clear() {

@@ -34,6 +34,9 @@ public struct NumericDateStamp: Equatable {
 /// without a view.
 public enum NumericDateParser {
     public static let maxDigits = 8
+    /// How many days before today a typed date may fall and still be read as
+    /// this year. Anything older is treated as next year's occurrence.
+    public static let graceDays = 3
 
     /// Keeps only digits, capped at `maxDigits`.
     public static func sanitize(_ raw: String) -> String {
@@ -56,10 +59,11 @@ public enum NumericDateParser {
     }
 
     /// Builds a concrete date from a full stamp. When `rollForward` is true and
-    /// the date falls before today, it advances to the next year so typed dates
-    /// always mean the next upcoming occurrence. A date earlier today is kept:
-    /// typed times default to midnight, so rolling those forward would silently
-    /// jump a whole year. Returns the date and the year actually used.
+    /// the date is clearly in the past — more than `graceDays` before today — it
+    /// advances to the next year so typed dates always mean the next upcoming
+    /// occurrence. Dates within the grace window (and earlier times today) are
+    /// kept: typed times default to midnight, so rolling a near date forward
+    /// would silently jump a whole year. Returns the date and the year used.
     public static func date(
         from stamp: NumericDateStamp,
         year: Int,
@@ -87,8 +91,10 @@ public enum NumericDateParser {
 
         var resolvedYear = year
         if rollForward,
-           result < calendar.startOfDay(for: now),
            year == calendar.component(.year, from: now),
+           let cutoff = calendar.date(byAdding: .day, value: -graceDays,
+                                      to: calendar.startOfDay(for: now)),
+           result < cutoff,
            let bumped = calendar.date(byAdding: .year, value: 1, to: result) {
             result = bumped
             resolvedYear = calendar.component(.year, from: bumped)
